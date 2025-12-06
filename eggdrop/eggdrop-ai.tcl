@@ -23,7 +23,7 @@ set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 array set llmbot_last_request {}
 
 # Bind to public channel messages
-bind pub * * llmbot_pub_handler
+bind pubm - * llmbot_pub_handler
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
     putlog "DEBUG: Handler called - nick=$nick chan=$chan text=$text botnick=$::botnick"
