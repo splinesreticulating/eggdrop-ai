@@ -17,6 +17,7 @@ package require http
 set llmbot_gateway "http://127.0.0.1:3042/chat"
 set llmbot_timeout 15000
 set llmbot_rate_limit 10 ;# seconds between requests per user
+set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 
 # Rate limiting storage: array of user -> timestamp
 array set llmbot_last_request {}
@@ -63,7 +64,7 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
 }
 
 proc llmbot_query {nick chan message} {
-    global llmbot_gateway llmbot_timeout
+    global llmbot_gateway llmbot_timeout llmbot_max_response_size
 
     set payload "\{\"message\":\"[llmbot_json_escape $message]\",\"user\":\"[llmbot_json_escape $nick]\",\"channel\":\"[llmbot_json_escape $chan]\"\}"
 
@@ -80,15 +81,22 @@ proc llmbot_query {nick chan message} {
         ::http::cleanup $token
 
         if {$status eq "ok" && $ncode == 200} {
+            # Limit response size to prevent DoS
+            if {[string length $data] > $llmbot_max_response_size} {
+                putserv "PRIVMSG $chan :$nick: response too large, truncated"
+                set data [string range $data 0 $llmbot_max_response_size]
+            }
+
+            # Sanitize and send (note: split on literal \n after sanitization replaces them with spaces)
             foreach line [split [llmbot_sanitize_irc $data] "\n"] {
                 set line [string trim $line]
                 if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
             }
         } else {
-            putserv "PRIVMSG $chan :$nick: gateway error (status: $status, code: $ncode)"
+            putserv "PRIVMSG $chan :$nick: gateway error, please try again"
         }
     } error]} {
-        putserv "PRIVMSG $chan :$nick: failed to reach gateway - $error"
+        putserv "PRIVMSG $chan :$nick: failed to reach gateway"
     }
 }
 

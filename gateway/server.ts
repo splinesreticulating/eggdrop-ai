@@ -4,15 +4,23 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const app = express();
-app.use(helmet());
-app.use(express.json({ limit: '10kb' }));
-
 // Configuration
 const PORT = parseInt(process.env.PORT || '3042', 10);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = process.env.MODEL || 'qwen/qwen3-4b:free';
+const REPO_URL = process.env.REPO_URL || 'https://github.com/splinesreticulating/eggdrop-ai';
+
+// Validate required configuration on startup
+if (!OPENROUTER_API_KEY) {
+  console.error('ERROR: OPENROUTER_API_KEY environment variable is not set');
+  console.error('Get your API key from: https://openrouter.ai/keys');
+  process.exit(1);
+}
+
+const app = express();
+app.use(helmet());
+app.use(express.json({ limit: '10kb' }));
 
 // Limits
 const MAX_MESSAGE_LENGTH = 1000;
@@ -21,6 +29,8 @@ const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 30000;
 const MAX_TOKENS = 100;
+const TEMPERATURE = 0.7;
+const TOP_P = 0.9;
 
 // System prompt defining bot personality
 const SYSTEM_PROMPT = `You are an IRC bot assistant. Your core traits:
@@ -71,11 +81,6 @@ app.post('/chat', async (req: Request, res: Response) => {
     const validationError = validateRequest(chatReq);
     if (validationError) return res.status(400).send(validationError);
 
-    if (!OPENROUTER_API_KEY) {
-      console.error('OPENROUTER_API_KEY not set');
-      return res.status(500).send('Gateway not configured');
-    }
-
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
 
@@ -89,7 +94,7 @@ app.post('/chat', async (req: Request, res: Response) => {
         headers: {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://github.com/yourusername/eggdrop-ai',
+          'HTTP-Referer': REPO_URL,
           'X-Title': 'Eggdrop AI Bot',
         },
         body: JSON.stringify({
@@ -99,8 +104,8 @@ app.post('/chat', async (req: Request, res: Response) => {
             { role: 'user', content: trimmedMessage },
           ],
           max_tokens: MAX_TOKENS,
-          temperature: 0.7,
-          top_p: 0.9,
+          temperature: TEMPERATURE,
+          top_p: TOP_P,
         }),
       });
       clearTimeout(timeoutId);
