@@ -52,7 +52,7 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
     set user_key "${nick}!${chan}"
 
     if {[info exists llmbot_last_request($user_key)]} {
-        set elapsed [expr {$now - llmbot_last_request($user_key)}]
+        set elapsed [expr {$now - $llmbot_last_request($user_key)}]
         if {$elapsed < $llmbot_rate_limit} {
             putserv "PRIVMSG $chan :$nick: please wait [expr {$llmbot_rate_limit - $elapsed}]s"
             return 0
