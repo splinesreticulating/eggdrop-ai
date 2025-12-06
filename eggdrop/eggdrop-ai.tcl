@@ -26,7 +26,6 @@ array set llmbot_last_request {}
 bind pubm - * llmbot_pub_handler
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
-    putlog "DEBUG: Handler called - nick=$nick chan=$chan text=$text botnick=$::botnick"
     global llmbot_last_request llmbot_rate_limit botnick
 
     # Parse trigger and extract query (avoid regex for security)
@@ -127,4 +126,4 @@ proc llmbot_cleanup {min hour day month year} {
     }
 }
 
-putlog "eggdrop-ai.tcl loaded - LLM gateway ready (FROM GIT REPO)"
+putlog "eggdrop-ai.tcl loaded - LLM gateway ready"
