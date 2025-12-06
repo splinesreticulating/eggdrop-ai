@@ -28,12 +28,24 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
 
     # Check if message mentions the bot (using actual bot nickname)
+    # Use string match instead of regex to avoid injection
     set trigger ""
-    set bot_pattern [string tolower $botnick]
-    if {[regexp -nocase "^@${bot_pattern}\[:\\s\]+(.+)" $text match query]} {
+    set text_lower [string tolower $text]
+    set bot_lower [string tolower $botnick]
+
+    # Check for @botname pattern
+    if {[string match "@${bot_lower}:*" $text_lower] || [string match "@${bot_lower} *" $text_lower]} {
         set trigger "@${botnick}"
-    } elseif {[regexp -nocase "^${bot_pattern}\[:\\s\]+(.+)" $text match query]} {
+        # Extract query after @botname: or @botname<space>
+        if {[string match "@${bot_lower}:*" $text_lower]} {
+            set query [string trim [string range $text [expr {[string length $botnick] + 2}] end]]
+        } else {
+            set query [string trim [string range $text [expr {[string length $botnick] + 2}] end]]
+        }
+    } elseif {[string match "${bot_lower}:*" $text_lower]} {
         set trigger "${botnick}:"
+        # Extract query after botname:
+        set query [string trim [string range $text [expr {[string length $botnick] + 1}] end]]
     } else {
         return 0
     }
@@ -93,8 +105,11 @@ proc llmbot_query {nick chan message} {
         ::http::cleanup $token
 
         if {$status eq "ok" && $ncode == 200} {
+            # Sanitize response before sending to IRC to prevent command injection
+            set sanitized_data [llmbot_sanitize_irc $data]
+
             # Split response into lines if needed (for long responses)
-            set lines [split $data "\n"]
+            set lines [split $sanitized_data "\n"]
             foreach line $lines {
                 set line [string trim $line]
                 if {$line ne ""} {
@@ -110,14 +125,31 @@ proc llmbot_query {nick chan message} {
 }
 
 proc llmbot_json_escape {text} {
-    # Escape special JSON characters
+    # Escape special JSON characters (comprehensive escaping)
     set text [string map {
         "\\" "\\\\"
         "\"" "\\\""
         "\n" "\\n"
         "\r" "\\r"
         "\t" "\\t"
+        "\f" "\\f"
+        "\b" "\\b"
     } $text]
+    # Remove any remaining control characters
+    regsub -all {[\x00-\x1F]} $text "" text
+    return $text
+}
+
+proc llmbot_sanitize_irc {text} {
+    # Remove IRC control characters to prevent command injection
+    # Strip CR, LF, and NULL bytes that could be used for IRC protocol injection
+    set text [string map {
+        "\r" " "
+        "\n" " "
+        "\x00" ""
+    } $text]
+    # Remove any other control characters that could be dangerous
+    regsub -all {[\x00-\x1F]} $text "" text
     return $text
 }
 
