@@ -9,7 +9,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3042;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = process.env.MODEL || 'qwen/qwen-2.5-7b-instruct:free';
+const MODEL = process.env.MODEL || 'qwen/qwen3-4b:free';
 
 // System prompt defining bot personality
 const SYSTEM_PROMPT = `You are an IRC bot assistant. Your core traits:

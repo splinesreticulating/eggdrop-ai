@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 - **Eggdrop Tcl script** (`eggdrop/eggdrop-ai.tcl`) - IRC bot that captures mentions and forwards to gateway
 - **Node.js/TypeScript gateway** (`gateway/server.ts`) - Express server that proxies requests to OpenRouter API
-- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen-2.5-7b-instruct:free)
+- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free)
 
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
 
@@ -85,7 +85,7 @@ When modifying bot behavior, edit this constant rather than adding code logic.
 Environment variables in `gateway/.env`:
 - `OPENROUTER_API_KEY` - Required, get from https://openrouter.ai/keys
 - `PORT` - Default 3042
-- `MODEL` - Default qwen/qwen-2.5-7b-instruct:free
+- `MODEL` - Default qwen/qwen3-4b:free
 
 Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)

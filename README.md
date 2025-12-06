@@ -21,7 +21,7 @@ IRC User → Eggdrop Bot → Local Gateway (Node/TS) → OpenRouter API
 **Features:**
 - Per-user rate limiting (10s cooldown)
 - Error handling at every layer
-- Free tier model by default (qwen/qwen-2.5-7b-instruct:free)
+- Free tier model by default (qwen/qwen3-4b:free)
 - Minimal dependencies
 - Plain text responses for easy Tcl parsing
 
@@ -122,10 +122,11 @@ Users are rate-limited to prevent spam (10 second cooldown by default):
 |----------|---------|-------------|
 | `OPENROUTER_API_KEY` | _(required)_ | Your OpenRouter API key |
 | `PORT` | `3042` | Gateway HTTP port |
-| `MODEL` | `qwen/qwen-2.5-7b-instruct:free` | OpenRouter model ID |
+| `MODEL` | `qwen/qwen3-4b:free` | OpenRouter model ID |
 
 **Popular free models:**
-- `qwen/qwen-2.5-7b-instruct:free` (default, very fast)
+- `qwen/qwen3-4b:free` (default, fast and capable)
+- `qwen/qwen-2.5-7b-instruct:free`
 - `meta-llama/llama-3.2-3b-instruct:free`
 - `google/gemma-2-9b-it:free`
 
@@ -296,7 +297,7 @@ Free tier models are rate-limited by OpenRouter. Monitor usage at:
 https://openrouter.ai/activity
 
 **Tips for staying in free tier:**
-- Use `qwen/qwen-2.5-7b-instruct:free` (default)
+- Use `qwen/qwen3-4b:free` (default)
 - Keep `max_tokens` low (currently 100)
 - Rate limiting in Tcl script helps prevent abuse
 

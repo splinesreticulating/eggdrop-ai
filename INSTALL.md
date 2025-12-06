@@ -39,7 +39,7 @@ Add your OpenRouter API key:
 ```
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 PORT=3042
-MODEL=qwen/qwen-2.5-7b-instruct:free
+MODEL=qwen/qwen3-4b:free
 ```
 
 Save and exit (Ctrl+X, Y, Enter in nano).
@@ -53,7 +53,7 @@ npm start
 You should see:
 ```
 Eggdrop AI gateway listening on port 3042
-Model: qwen/qwen-2.5-7b-instruct:free
+Model: qwen/qwen3-4b:free
 API key configured: yes
 ```
 
