@@ -29,7 +29,14 @@ IRC User → Eggdrop Bot → Local Gateway (Node/TS) → OpenRouter API
 
 ## Installation
 
-### 1. Gateway Setup
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/splinesreticulating/eggdrop-ai.git
+cd eggdrop-ai
+```
+
+### 2. Gateway Setup
 
 ```bash
 cd gateway
