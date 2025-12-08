@@ -1,6 +1,8 @@
 import express, { Request, Response } from 'express';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -32,19 +34,11 @@ const MAX_TOKENS = 300;
 const TEMPERATURE = 0.7;
 const TOP_P = 0.9;
 
-// System prompt defining bot personality
-const SYSTEM_PROMPT = `You are an IRC bot assistant. Your core traits:
-
-- Only respond when directly addressed
-- Extremely concise: 1-2 sentences maximum
-- High signal, zero fluff
-- No greetings, no emojis, no verbosity
-- Direct answers only
-- Skip politeness - just deliver information
-- If you don't know, say so in 5 words or less
-- No internal reasoning - respond directly
-
-You're in an IRC channel where bandwidth and attention are precious. Every word counts.`;
+// Load system prompt from file
+const SYSTEM_PROMPT = fs.readFileSync(
+  path.join(__dirname, 'system-prompt.txt'),
+  'utf-8'
+).trim();
 
 interface ChatRequest {
   message: string;

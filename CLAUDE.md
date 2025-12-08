@@ -67,13 +67,13 @@ From Eggdrop DCC/partyline:
 - Logs all requests with timestamp, user, channel, and token usage
 
 ### System Prompt Philosophy
-Bot personality is defined in `gateway/server.ts` SYSTEM_PROMPT constant (lines 35-46). The bot is:
+Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
 - Extremely concise (1-2 sentences max)
 - No greetings, emojis, or verbosity
 - Direct answers only
 - Optimized for IRC bandwidth constraints
 
-When modifying bot behavior, edit this constant rather than adding code logic.
+When modifying bot behavior, edit this file rather than adding code logic.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - Triggers dynamically using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>` (string match in lines 36-42)
@@ -147,7 +147,7 @@ Eggdrop integration:
 ## Common Modifications
 
 ### Changing bot personality
-Edit `SYSTEM_PROMPT` in `gateway/server.ts` (lines 35-46)
+Edit `gateway/system-prompt.txt`
 
 ### Changing trigger patterns
 Edit string match patterns in `eggdrop/eggdrop-ai.tcl` (lines 36-42). The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
@@ -159,7 +159,7 @@ Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 19)
 Set `MODEL` in `gateway/.env` to any OpenRouter model ID
 
 ### Increasing response length
-Edit `MAX_TOKENS` constant in `gateway/server.ts` (line 31) and update system prompt accordingly
+Edit `MAX_TOKENS` constant in `gateway/server.ts` (line 31) and update `gateway/system-prompt.txt` accordingly
 
 ### Adjusting security limits
 - Gateway input validation: Edit `MAX_MESSAGE_LENGTH`, `MAX_USER_LENGTH`, `MAX_CHANNEL_LENGTH` (lines 26-28)
