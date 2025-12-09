@@ -49,7 +49,6 @@ interface ChatRequest {
 interface OpenRouterResponse {
   choices?: Array<{ message?: { content?: string } }>;
   usage?: { total_tokens: number; prompt_tokens: number; completion_tokens: number };
-  model?: string;
 }
 
 // Helpers
@@ -79,7 +78,6 @@ app.post('/chat', async (req: Request, res: Response) => {
 
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
-    console.log(`  → Using model: ${MODEL}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -121,9 +119,6 @@ app.post('/chat', async (req: Request, res: Response) => {
         return res.status(502).send('Empty response from LLM');
       }
 
-      if (data.model) {
-        console.log(`  → Model used: ${data.model}`);
-      }
       if (data.usage) {
         console.log(`  → Tokens: ${data.usage.total_tokens} (prompt: ${data.usage.prompt_tokens}, completion: ${data.usage.completion_tokens})`);
       }
