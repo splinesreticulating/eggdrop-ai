@@ -15,7 +15,7 @@ package require http
 
 # Configuration
 set llmbot_gateway "http://127.0.0.1:3042/chat"
-set llmbot_timeout 15000
+set llmbot_timeout 45000 ;# 45 seconds for slower models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 
@@ -96,10 +96,15 @@ proc llmbot_query {nick chan message} {
                 if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
             }
         } else {
-            putserv "PRIVMSG $chan :$nick: gateway error, please try again"
+            # Show actual error details for debugging
+            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
+            if {$safe_data eq ""} { set safe_data "(no response)" }
+            putserv "PRIVMSG $chan :$nick: gateway error ($ncode): $safe_data"
         }
     } error]} {
-        putserv "PRIVMSG $chan :$nick: failed to reach gateway"
+        # Show actual error for debugging
+        set safe_error [string range [llmbot_sanitize_irc $error] 0 100]
+        putserv "PRIVMSG $chan :$nick: gateway failed: $safe_error"
     }
 }
 
