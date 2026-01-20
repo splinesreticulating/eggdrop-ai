@@ -108,10 +108,10 @@ export class VectorMemory {
     `);
 
     // Create virtual table for vector embeddings
+    // Note: vec0 virtual tables use automatic rowid, we rely on message.id matching rowid
     this.db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS vec_messages
       USING vec0(
-        message_id INTEGER PRIMARY KEY,
         embedding FLOAT[384]
       )
     `);
@@ -170,15 +170,17 @@ export class VectorMemory {
         try {
           const embedding = await this.generateEmbedding(message);
 
-          // Convert embedding array to binary format for sqlite-vec
-          const embeddingStr = JSON.stringify(embedding);
+          // Convert embedding array to binary buffer for sqlite-vec
+          const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
 
+          // Insert embedding - rowid will auto-increment to match message ID
+          // (both start at 1 and increment together)
           const insertVecStmt = this.db!.prepare(`
-            INSERT INTO vec_messages (message_id, embedding)
-            VALUES (?, ?)
+            INSERT INTO vec_messages (embedding)
+            VALUES (?)
           `);
 
-          insertVecStmt.run(messageId, embeddingStr);
+          insertVecStmt.run(embeddingBuffer);
 
           console.log(`[VectorMemory] Stored message ${messageId} with embedding in ${channel}`);
         } catch (err) {
@@ -231,7 +233,7 @@ export class VectorMemory {
     try {
       // Generate embedding for the query
       const queryEmbedding = await this.generateEmbedding(query);
-      const queryEmbeddingStr = JSON.stringify(queryEmbedding);
+      const queryEmbeddingBuffer = Buffer.from(new Float32Array(queryEmbedding).buffer);
 
       // Search for similar vectors using sqlite-vec
       // Note: We use vec_distance_cosine for cosine similarity
@@ -245,13 +247,13 @@ export class VectorMemory {
           m.timestamp,
           vec_distance_cosine(v.embedding, ?) as distance
         FROM vec_messages v
-        JOIN messages m ON v.message_id = m.id
+        JOIN messages m ON v.rowid = m.id
         WHERE m.channel = ?
         ORDER BY distance ASC
         LIMIT ?
       `);
 
-      const rows = stmt.all(queryEmbeddingStr, channel, limit) as (MemoryMessage & { distance: number })[];
+      const rows = stmt.all(queryEmbeddingBuffer, channel, limit) as (MemoryMessage & { distance: number })[];
 
       // Convert distance to similarity score (1 - distance for cosine)
       // Lower distance = higher similarity
