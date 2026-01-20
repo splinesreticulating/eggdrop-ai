@@ -18,6 +18,7 @@ export interface VectorMemoryOptions {
   topK: number;
   includeRecent: number;
   enabled: boolean;
+  retentionDays: number; // Delete messages older than this many days (0 = keep forever)
 }
 
 export class VectorMemory {
@@ -70,6 +71,9 @@ export class VectorMemory {
       // Create tables
       this.setupTables();
 
+      // Clean up old messages based on retention policy
+      this.cleanupOldMessages();
+
       // Load embedding model
       console.log('[VectorMemory] Loading embedding model (this may take 10-30 seconds on first run)...');
       this.embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
@@ -117,6 +121,48 @@ export class VectorMemory {
     `);
 
     console.log('[VectorMemory] Database tables created/verified');
+  }
+
+  /**
+   * Clean up old messages based on retention policy
+   */
+  private cleanupOldMessages(): void {
+    if (!this.db || this.options.retentionDays === 0) {
+      return; // Keep forever if retentionDays is 0
+    }
+
+    try {
+      const cutoffTime = Date.now() - (this.options.retentionDays * 24 * 60 * 60 * 1000);
+
+      // Get IDs of messages to delete
+      const oldMessages = this.db.prepare(`
+        SELECT id FROM messages WHERE timestamp < ?
+      `).all(cutoffTime) as { id: number }[];
+
+      if (oldMessages.length === 0) {
+        return;
+      }
+
+      // Delete from vec_messages first (by rowid)
+      const deleteVecStmt = this.db.prepare(`
+        DELETE FROM vec_messages WHERE rowid = ?
+      `);
+
+      for (const msg of oldMessages) {
+        deleteVecStmt.run(msg.id);
+      }
+
+      // Delete from messages table
+      const deleteResult = this.db.prepare(`
+        DELETE FROM messages WHERE timestamp < ?
+      `).run(cutoffTime);
+
+      if (deleteResult.changes > 0) {
+        console.log(`[VectorMemory] Cleaned up ${deleteResult.changes} messages older than ${this.options.retentionDays} days`);
+      }
+    } catch (err) {
+      console.error('[VectorMemory] Cleanup failed:', err);
+    }
   }
 
   /**
