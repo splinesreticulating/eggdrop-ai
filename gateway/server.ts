@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { VectorMemory } from './memory';
 
 dotenv.config();
 
@@ -19,6 +20,14 @@ if (!OPENROUTER_API_KEY) {
   console.error('Get your API key from: https://openrouter.ai/keys');
   process.exit(1);
 }
+
+// Vector Memory Configuration
+const memory = new VectorMemory({
+  dbPath: process.env.MEMORY_DB_PATH || path.join(__dirname, 'data', 'memory.db'),
+  topK: parseInt(process.env.MEMORY_TOP_K || '15', 10),
+  includeRecent: parseInt(process.env.MEMORY_RECENT_COUNT || '5', 10),
+  enabled: process.env.MEMORY_ENABLED !== 'false'
+});
 
 const app = express();
 app.use(helmet());
@@ -79,6 +88,24 @@ app.post('/chat', async (req: Request, res: Response) => {
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
 
+    // Store user message in vector memory (async, doesn't block)
+    memory.addMessage(chatReq.channel, chatReq.user, trimmedMessage, 'user').catch(err => {
+      console.error('Failed to store user message:', err);
+    });
+
+    // Get relevant context from vector memory
+    const contextMessages = await memory.getContext(chatReq.channel, trimmedMessage);
+
+    // Build messages array with context
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...contextMessages.map(msg => ({
+        role: msg.role,
+        content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
+      })),
+      { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
+    ];
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
@@ -94,10 +121,7 @@ app.post('/chat', async (req: Request, res: Response) => {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: trimmedMessage },
-          ],
+          messages: messages,
           max_tokens: MAX_TOKENS,
           temperature: TEMPERATURE,
           top_p: TOP_P,
@@ -124,6 +148,12 @@ app.post('/chat', async (req: Request, res: Response) => {
       }
 
       console.log(`  → Reply: ${sanitizeForLog(reply)}`);
+
+      // Store assistant response in vector memory (async, doesn't block)
+      memory.addMessage(chatReq.channel, 'assistant', reply, 'assistant').catch(err => {
+        console.error('Failed to store assistant message:', err);
+      });
+
       res.type('text/plain').send(reply);
 
     } catch (fetchError: unknown) {
@@ -141,7 +171,35 @@ app.post('/chat', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`Eggdrop AI gateway listening on 127.0.0.1:${PORT}`);
-  console.log(`Model: ${MODEL}`);
-});
+// Initialize memory system and start server
+(async () => {
+  try {
+    // Initialize vector memory (loads embedding model)
+    await memory.initialize();
+
+    app.listen(PORT, '127.0.0.1', () => {
+      console.log(`Eggdrop AI gateway listening on 127.0.0.1:${PORT}`);
+      console.log(`Model: ${MODEL}`);
+      if (memory.isReady()) {
+        const stats = memory.getStats();
+        console.log(`Vector memory: ${stats.totalMessages} messages stored`);
+      }
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('\nShutting down gracefully...');
+      await memory.close();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      console.log('\nShutting down gracefully...');
+      await memory.close();
+      process.exit(0);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+})();

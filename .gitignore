@@ -21,3 +21,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Vector Memory Database
+gateway/data/
