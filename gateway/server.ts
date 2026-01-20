@@ -27,7 +27,7 @@ const memory = new VectorMemory({
   topK: parseInt(process.env.MEMORY_TOP_K || '15', 10),
   includeRecent: parseInt(process.env.MEMORY_RECENT_COUNT || '5', 10),
   enabled: process.env.MEMORY_ENABLED !== 'false',
-  retentionDays: parseInt(process.env.MEMORY_RETENTION_DAYS || '30', 10)
+  retentionDays: parseInt(process.env.MEMORY_RETENTION_DAYS || '90', 10)
 });
 
 const app = express();
