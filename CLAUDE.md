@@ -142,7 +142,8 @@ Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 
 Gateway runs as localhost-only service (127.0.0.1):
 - No authentication needed (not exposed externally)
-- Use PM2 for process management (recommended)
+- Production runs as a systemd service from `/home/eggdrop/eggdrop-ai`
+- Use PM2 for process management (recommended alternative)
 - Or systemd service (see README.md lines 251-277)
 
 Eggdrop integration:
