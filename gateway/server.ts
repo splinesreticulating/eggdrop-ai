@@ -80,6 +80,28 @@ app.get('/health', (_req: Request, res: Response) => {
   res.send('OK');
 });
 
+// Store message endpoint (no LLM response, just memory storage)
+app.post('/store', async (req: Request, res: Response) => {
+  try {
+    const chatReq = req.body as ChatRequest;
+
+    const validationError = validateRequest(chatReq);
+    if (validationError) return res.status(400).send(validationError);
+
+    const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
+
+    // Store message in vector memory (async, doesn't block)
+    memory.addMessage(chatReq.channel, chatReq.user, trimmedMessage, 'user').catch(err => {
+      console.error('Failed to store message:', err);
+    });
+
+    res.send('Stored');
+  } catch (error) {
+    console.error('Store endpoint error:', error);
+    res.status(500).send('Internal gateway error');
+  }
+});
+
 app.post('/chat', async (req: Request, res: Response) => {
   try {
     const chatReq = req.body as ChatRequest;

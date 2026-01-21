@@ -48,6 +48,11 @@ curl http://127.0.0.1:3042/health
 curl -X POST http://127.0.0.1:3042/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"what is IRC?","user":"testuser","channel":"#test"}'
+
+# Test memory storage endpoint (no LLM response)
+curl -X POST http://127.0.0.1:3042/store \
+  -H "Content-Type: application/json" \
+  -d '{"message":"just storing this message","user":"testuser","channel":"#test"}'
 ```
 
 ### Eggdrop Testing
@@ -60,9 +65,10 @@ From Eggdrop DCC/partyline:
 
 ### Gateway (gateway/server.ts)
 - Single TypeScript file Express server with helmet security headers
-- Two endpoints:
+- Three endpoints:
   - `GET /health` - Health check (returns "OK")
-  - `POST /chat` - Main LLM endpoint
+  - `POST /chat` - Main LLM endpoint (generates response and stores in memory)
+  - `POST /store` - Memory storage only (no LLM response)
 - Request format: `{message: string, user: string, channel: string}`
 - Response: Plain text (not JSON) for easy Tcl parsing
 - Message limits: 1000 chars max input (trimmed to 500), 100 token responses
@@ -82,16 +88,18 @@ Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
 When modifying bot behavior, edit this file rather than adding code logic.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
-- Triggers dynamically using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>` (string match in lines 36-42)
+- **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
+- **Response triggers**: Only responds when directly addressed using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>`
 - Uses `string match` instead of regex for security (prevents regex injection)
 - Uses Eggdrop's `$botnick` variable for generic trigger matching
 - Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
 - Rate limit storage: in-memory array `llmbot_last_request` keyed by `nick!channel`
 - Cleanup timer: runs every 5 minutes to clear old rate limit entries
 - Response size limit: 50KB max (configurable via `llmbot_max_response_size`)
-- JSON construction: uses `format` command for readability (lines 69-72)
+- JSON construction: uses `format` command for readability
 - IRC sanitization: removes control characters to prevent command injection
 - Error handling: catches HTTP failures and displays user-friendly messages
+- Async message storage: Uses fire-and-forget pattern with `/store` endpoint to avoid blocking channel flow
 
 ### Configuration
 Environment variables in `gateway/.env`:
