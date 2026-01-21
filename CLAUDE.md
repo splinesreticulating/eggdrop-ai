@@ -7,9 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 - **Eggdrop Tcl script** (`eggdrop/eggdrop-ai.tcl`) - IRC bot that captures mentions and forwards to gateway
 - **Node.js/TypeScript gateway** (`gateway/server.ts`) - Express server that proxies requests to OpenRouter API
-- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free)
+- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free, production: xiaomi/mimo-v2-flash:free)
 
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
+
+### Production Server
+The bot runs on a production server accessible via:
+```bash
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee
+```
 
 ## Development Commands
 
