@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { pipeline, Pipeline } from '@xenova/transformers';
+import { pipeline } from '@xenova/transformers';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -23,7 +23,7 @@ export interface VectorMemoryOptions {
 
 export class VectorMemory {
   private db: Database.Database | null = null;
-  private embedder: Pipeline | null = null;
+  private embedder: any = null;
   private options: VectorMemoryOptions;
   private initialized: boolean = false;
 
