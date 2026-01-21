@@ -99,6 +99,14 @@ Environment variables in `gateway/.env`:
 - `PORT` - Default 3042
 - `MODEL` - Default qwen/qwen3-4b:free
 - `REPO_URL` - Optional, GitHub repo URL for OpenRouter attribution
+- `DEBUG_LOG_REQUESTS` - Set to `true` to log full message arrays sent to OpenRouter (useful for debugging context/memory issues)
+
+Vector memory environment variables:
+- `MEMORY_ENABLED` - Set to `false` to disable vector memory (default: enabled)
+- `MEMORY_DB_PATH` - Database file path (default: `gateway/data/memory.db`)
+- `MEMORY_TOP_K` - Max similar messages to retrieve (default: 15)
+- `MEMORY_RECENT_COUNT` - Recent messages to include (default: 5)
+- `MEMORY_RETENTION_DAYS` - Delete messages older than N days, 0 = keep forever (default: 90)
 
 Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)

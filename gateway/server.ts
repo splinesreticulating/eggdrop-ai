@@ -13,6 +13,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = process.env.MODEL || 'qwen/qwen3-4b:free';
 const REPO_URL = process.env.REPO_URL || 'https://github.com/splinesreticulating/eggdrop-ai';
+const DEBUG_LOG_REQUESTS = process.env.DEBUG_LOG_REQUESTS === 'true';
 
 // Validate required configuration on startup
 if (!OPENROUTER_API_KEY) {
@@ -106,6 +107,18 @@ app.post('/chat', async (req: Request, res: Response) => {
       })),
       { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
     ];
+
+    // Debug logging: log full request if enabled
+    if (DEBUG_LOG_REQUESTS) {
+      console.log('[DEBUG] Full request to OpenRouter:');
+      console.log(JSON.stringify({
+        model: MODEL,
+        messages: messages,
+        max_tokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+        top_p: TOP_P,
+      }, null, 2));
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
