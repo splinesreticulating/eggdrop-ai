@@ -90,21 +90,27 @@ app.post('/chat', async (req: Request, res: Response) => {
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
 
-    // Store user message in vector memory (async, doesn't block)
+    // Store user message in vector memory (async, doesn't block response)
+    // Note: This runs async so the current message won't appear in the context below
+    // We manually append it at the end of the messages array to ensure it's included
     memory.addMessage(chatReq.channel, chatReq.user, trimmedMessage, 'user').catch(err => {
       console.error('Failed to store user message:', err);
     });
 
     // Get relevant context from vector memory
+    // This returns messages sorted chronologically (oldest to newest)
+    // The current user message is NOT included (it's stored async above)
     const contextMessages = await memory.getContext(chatReq.channel, trimmedMessage);
 
     // Build messages array with context
+    // Order: system prompt → historical context (chronological) → current message
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...contextMessages.map(msg => ({
         role: msg.role,
         content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
       })),
+      // Current message is appended here (not in context) because it's stored async
       { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
     ];
 

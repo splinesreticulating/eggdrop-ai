@@ -271,7 +271,12 @@ export class VectorMemory {
   /**
    * Search for semantically similar messages using vector search
    */
-  async searchSimilar(channel: string, query: string, limit: number): Promise<MemoryMessage[]> {
+  async searchSimilar(
+    channel: string,
+    query: string,
+    limit: number,
+    excludeRecentCount: number = 0
+  ): Promise<MemoryMessage[]> {
     if (!this.options.enabled || !this.initialized || !this.db) {
       return [];
     }
@@ -283,6 +288,7 @@ export class VectorMemory {
 
       // Search for similar vectors using sqlite-vec
       // Note: We use vec_distance_cosine for cosine similarity
+      // Exclude recent messages to avoid duplication
       const stmt = this.db.prepare(`
         SELECT
           m.id,
@@ -295,11 +301,21 @@ export class VectorMemory {
         FROM vec_messages v
         JOIN messages m ON v.rowid = m.id
         WHERE m.channel = ?
+        ${excludeRecentCount > 0 ? `
+        AND m.id NOT IN (
+          SELECT id FROM messages
+          WHERE channel = ?
+          ORDER BY timestamp DESC
+          LIMIT ?
+        )` : ''}
         ORDER BY distance ASC
         LIMIT ?
       `);
 
-      const rows = stmt.all(queryEmbeddingBuffer, channel, limit) as (MemoryMessage & { distance: number })[];
+      const rows = (excludeRecentCount > 0
+        ? stmt.all(queryEmbeddingBuffer, channel, channel, excludeRecentCount, limit)
+        : stmt.all(queryEmbeddingBuffer, channel, limit)
+      ) as (MemoryMessage & { distance: number })[];
 
       // Convert distance to similarity score (1 - distance for cosine)
       // Lower distance = higher similarity
@@ -327,9 +343,10 @@ export class VectorMemory {
 
     try {
       // Fetch recent and similar messages in parallel
+      // Exclude recent messages from similar search to reduce duplication
       const [recent, similar] = await Promise.all([
         this.getRecentMessages(channel, this.options.includeRecent),
-        this.searchSimilar(channel, query, this.options.topK)
+        this.searchSimilar(channel, query, this.options.topK, this.options.includeRecent)
       ]);
 
       // Deduplicate: recent messages take priority
@@ -341,9 +358,16 @@ export class VectorMemory {
       // Combine: recent first (chronological), then similar
       const combined = [...recent, ...additionalContext];
 
-      console.log(`[VectorMemory] Context: ${recent.length} recent + ${additionalContext.length} similar = ${combined.length} total`);
+      // CRITICAL: Sort ALL context chronologically to maintain temporal coherence
+      // This ensures the model sees a proper timeline where:
+      // - Older information appears first
+      // - Newer information appears last
+      // - The model can understand which facts supersede others
+      const sorted = combined.sort((a, b) => a.timestamp - b.timestamp);
 
-      return combined;
+      console.log(`[VectorMemory] Context: ${recent.length} recent + ${additionalContext.length} similar = ${sorted.length} total (chronologically sorted)`);
+
+      return sorted;
     } catch (err) {
       console.error('[VectorMemory] Failed to get context:', err);
       return [];
