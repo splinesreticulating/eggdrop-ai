@@ -16,7 +16,7 @@ package require http
 # Configuration
 set llmbot_gateway "http://127.0.0.1:3042/chat"
 set llmbot_store_gateway "http://127.0.0.1:3042/store"
-set llmbot_timeout 45000 ;# 45 seconds for slower models
+set llmbot_timeout 100000 ;# 100 seconds for slow free tier models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 

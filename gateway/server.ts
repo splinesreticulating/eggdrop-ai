@@ -40,7 +40,7 @@ const MAX_MESSAGE_LENGTH = 1000;
 const MAX_USER_LENGTH = 100;
 const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
-const API_TIMEOUT_MS = 30000;
+const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
 const TEMPERATURE = 0.7;
 const TOP_P = 0.9;
@@ -112,16 +112,12 @@ app.post('/chat', async (req: Request, res: Response) => {
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
 
-    // Store user message in vector memory (async, doesn't block response)
-    // Note: This runs async so the current message won't appear in the context below
-    // We manually append it at the end of the messages array to ensure it's included
-    memory.addMessage(chatReq.channel, chatReq.user, trimmedMessage, 'user').catch(err => {
-      console.error('Failed to store user message:', err);
-    });
+    // NOTE: User message is already stored by Eggdrop via /store endpoint
+    // We don't store it again here to avoid duplication
+    // We only store the assistant's response below (after LLM generates it)
 
     // Get relevant context from vector memory
     // This returns messages sorted chronologically (oldest to newest)
-    // The current user message is NOT included (it's stored async above)
     const contextMessages = await memory.getContext(chatReq.channel, trimmedMessage);
 
     // Build messages array with context
@@ -132,7 +128,8 @@ app.post('/chat', async (req: Request, res: Response) => {
         role: msg.role,
         content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
       })),
-      // Current message is appended here (not in context) because it's stored async
+      // Append current message at the end to ensure it's included
+      // (The /store call from Eggdrop may or may not have completed yet)
       { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
     ];
 

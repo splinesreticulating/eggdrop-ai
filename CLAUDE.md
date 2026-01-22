@@ -67,16 +67,17 @@ From Eggdrop DCC/partyline:
 - Single TypeScript file Express server with helmet security headers
 - Three endpoints:
   - `GET /health` - Health check (returns "OK")
-  - `POST /chat` - Main LLM endpoint (generates response and stores in memory)
-  - `POST /store` - Memory storage only (no LLM response)
+  - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
+  - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
 - Request format: `{message: string, user: string, channel: string}`
 - Response: Plain text (not JSON) for easy Tcl parsing
-- Message limits: 1000 chars max input (trimmed to 500), 100 token responses
+- Message limits: 1000 chars max input (trimmed to 500), 300 token responses
 - Request body size limit: 10KB
-- API timeout: 30 seconds with AbortController
+- API timeout: 90 seconds with AbortController (for slow free tier models)
 - Security: Input validation, control character sanitization, localhost-only binding
 - Error handling returns HTTP error codes with plain text messages (no status code leakage)
 - Logs all requests with timestamp, user, channel, and token usage
+- Note: /chat does NOT store user message (already stored by Eggdrop via /store) to avoid duplication
 
 ### System Prompt Philosophy
 Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
@@ -118,7 +119,8 @@ Vector memory environment variables:
 
 Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)
-- `llmbot_timeout` - HTTP timeout in ms (default: 15000)
+- `llmbot_store_gateway` - Memory storage URL (default: http://127.0.0.1:3042/store)
+- `llmbot_timeout` - HTTP timeout in ms (default: 100000 / 100 seconds)
 - `llmbot_rate_limit` - Seconds between requests per user (default: 10)
 - `llmbot_max_response_size` - Max response size in bytes (default: 50000)
 

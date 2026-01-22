@@ -175,7 +175,7 @@ Edit these variables at the top of the script:
 ```tcl
 set llmbot_gateway "http://127.0.0.1:3042/chat"           ;# LLM query endpoint
 set llmbot_store_gateway "http://127.0.0.1:3042/store"    ;# Memory storage endpoint
-set llmbot_timeout 45000                                   ;# 45 seconds
+set llmbot_timeout 100000                                  ;# 100 seconds (for slow free tier models)
 set llmbot_rate_limit 10                                   ;# 10 seconds between requests
 set llmbot_max_response_size 50000                         ;# 50KB max response size
 ```
