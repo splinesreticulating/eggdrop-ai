@@ -1,7 +1,7 @@
 {
   "name": "eggdrop-ai-gateway",
-  "version": "1.0.0",
-  "description": "LLM gateway service for Eggdrop AI IRC bot",
+  "version": "2.0.0",
+  "description": "LLM gateway service for Eggdrop AI IRC bot with vector memory",
   "main": "server.ts",
   "scripts": {
     "dev": "tsx watch server.ts",
