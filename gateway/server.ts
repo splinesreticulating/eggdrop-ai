@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { VectorMemory } from './memory';
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = process.env.MODEL || 'qwen/qwen3-4b:free';
 const REPO_URL = process.env.REPO_URL || 'https://github.com/splinesreticulating/eggdrop-ai';
+const DEBUG_LOG_REQUESTS = process.env.DEBUG_LOG_REQUESTS === 'true';
 
 // Validate required configuration on startup
 if (!OPENROUTER_API_KEY) {
@@ -19,6 +21,15 @@ if (!OPENROUTER_API_KEY) {
   console.error('Get your API key from: https://openrouter.ai/keys');
   process.exit(1);
 }
+
+// Vector Memory Configuration
+const memory = new VectorMemory({
+  dbPath: process.env.MEMORY_DB_PATH || path.join(__dirname, 'data', 'memory.db'),
+  topK: parseInt(process.env.MEMORY_TOP_K || '15', 10),
+  includeRecent: parseInt(process.env.MEMORY_RECENT_COUNT || '5', 10),
+  enabled: process.env.MEMORY_ENABLED !== 'false',
+  retentionDays: parseInt(process.env.MEMORY_RETENTION_DAYS || '90', 10)
+});
 
 const app = express();
 app.use(helmet());
@@ -29,7 +40,7 @@ const MAX_MESSAGE_LENGTH = 1000;
 const MAX_USER_LENGTH = 100;
 const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
-const API_TIMEOUT_MS = 30000;
+const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
 const TEMPERATURE = 0.7;
 const TOP_P = 0.9;
@@ -69,6 +80,28 @@ app.get('/health', (_req: Request, res: Response) => {
   res.send('OK');
 });
 
+// Store message endpoint (no LLM response, just memory storage)
+app.post('/store', async (req: Request, res: Response) => {
+  try {
+    const chatReq = req.body as ChatRequest;
+
+    const validationError = validateRequest(chatReq);
+    if (validationError) return res.status(400).send(validationError);
+
+    const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
+
+    // Store message in vector memory (async, doesn't block)
+    memory.addMessage(chatReq.channel, chatReq.user, trimmedMessage, 'user').catch(err => {
+      console.error('Failed to store message:', err);
+    });
+
+    res.send('Stored');
+  } catch (error) {
+    console.error('Store endpoint error:', error);
+    res.status(500).send('Internal gateway error');
+  }
+});
+
 app.post('/chat', async (req: Request, res: Response) => {
   try {
     const chatReq = req.body as ChatRequest;
@@ -78,6 +111,39 @@ app.post('/chat', async (req: Request, res: Response) => {
 
     const trimmedMessage = chatReq.message.trim().slice(0, TRIM_MESSAGE_TO);
     console.log(`[${new Date().toISOString()}] ${sanitizeForLog(chatReq.user)} in ${sanitizeForLog(chatReq.channel)}: ${sanitizeForLog(trimmedMessage)}`);
+
+    // NOTE: User message is already stored by Eggdrop via /store endpoint
+    // We don't store it again here to avoid duplication
+    // We only store the assistant's response below (after LLM generates it)
+
+    // Get relevant context from vector memory
+    // This returns messages sorted chronologically (oldest to newest)
+    const contextMessages = await memory.getContext(chatReq.channel, trimmedMessage);
+
+    // Build messages array with context
+    // Order: system prompt → historical context (chronological) → current message
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...contextMessages.map(msg => ({
+        role: msg.role,
+        content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
+      })),
+      // Append current message at the end to ensure it's included
+      // (The /store call from Eggdrop may or may not have completed yet)
+      { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
+    ];
+
+    // Debug logging: log full request if enabled
+    if (DEBUG_LOG_REQUESTS) {
+      console.log('[DEBUG] Full request to OpenRouter:');
+      console.log(JSON.stringify({
+        model: MODEL,
+        messages: messages,
+        max_tokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+        top_p: TOP_P,
+      }, null, 2));
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -94,10 +160,7 @@ app.post('/chat', async (req: Request, res: Response) => {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: trimmedMessage },
-          ],
+          messages: messages,
           max_tokens: MAX_TOKENS,
           temperature: TEMPERATURE,
           top_p: TOP_P,
@@ -124,6 +187,12 @@ app.post('/chat', async (req: Request, res: Response) => {
       }
 
       console.log(`  → Reply: ${sanitizeForLog(reply)}`);
+
+      // Store assistant response in vector memory (async, doesn't block)
+      memory.addMessage(chatReq.channel, 'assistant', reply, 'assistant').catch(err => {
+        console.error('Failed to store assistant message:', err);
+      });
+
       res.type('text/plain').send(reply);
 
     } catch (fetchError: unknown) {
@@ -141,7 +210,35 @@ app.post('/chat', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`Eggdrop AI gateway listening on 127.0.0.1:${PORT}`);
-  console.log(`Model: ${MODEL}`);
-});
+// Initialize memory system and start server
+(async () => {
+  try {
+    // Initialize vector memory (loads embedding model)
+    await memory.initialize();
+
+    app.listen(PORT, '127.0.0.1', () => {
+      console.log(`Eggdrop AI gateway listening on 127.0.0.1:${PORT}`);
+      console.log(`Model: ${MODEL}`);
+      if (memory.isReady()) {
+        const stats = memory.getStats();
+        console.log(`Vector memory: ${stats.totalMessages} messages stored`);
+      }
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('\nShutting down gracefully...');
+      await memory.close();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      console.log('\nShutting down gracefully...');
+      await memory.close();
+      process.exit(0);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+})();

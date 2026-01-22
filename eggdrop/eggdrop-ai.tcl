@@ -15,7 +15,8 @@ package require http
 
 # Configuration
 set llmbot_gateway "http://127.0.0.1:3042/chat"
-set llmbot_timeout 45000 ;# 45 seconds for slower models
+set llmbot_store_gateway "http://127.0.0.1:3042/store"
+set llmbot_timeout 100000 ;# 100 seconds for slow free tier models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 
@@ -27,6 +28,11 @@ bind pubm - * llmbot_pub_handler
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
+
+    # Store ALL channel messages in memory (except from the bot itself)
+    if {$nick ne $botnick} {
+        llmbot_store_message $nick $chan $text
+    }
 
     # Parse trigger and extract query (avoid regex for security)
     set text_lower [string tolower $text]
@@ -61,6 +67,32 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
     set llmbot_last_request($user_key) $now
     llmbot_query $nick $chan $query
     return 0
+}
+
+proc llmbot_store_message {nick chan message} {
+    global llmbot_store_gateway
+
+    set payload [format {{"message":"%s","user":"%s","channel":"%s"}} \
+        [llmbot_json_escape $message] \
+        [llmbot_json_escape $nick] \
+        [llmbot_json_escape $chan]]
+
+    # Fire and forget - store message without waiting for response
+    if {[catch {
+        set token [::http::geturl $llmbot_store_gateway \
+            -query $payload \
+            -timeout 5000 \
+            -type "application/json" \
+            -headers [list "Content-Type" "application/json"] \
+            -command llmbot_store_callback]
+    } error]} {
+        # Silently fail - don't interrupt channel flow
+    }
+}
+
+proc llmbot_store_callback {token} {
+    # Cleanup after async store request
+    catch {::http::cleanup $token}
 }
 
 proc llmbot_query {nick chan message} {

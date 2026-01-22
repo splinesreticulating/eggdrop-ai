@@ -21,3 +21,11 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Vector Memory
+gateway/data/
+gateway/extensions/
+
+# Temporary files
+*.backup
+*.patch

@@ -7,9 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 - **Eggdrop Tcl script** (`eggdrop/eggdrop-ai.tcl`) - IRC bot that captures mentions and forwards to gateway
 - **Node.js/TypeScript gateway** (`gateway/server.ts`) - Express server that proxies requests to OpenRouter API
-- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free)
+- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free, production: xiaomi/mimo-v2-flash:free)
 
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
+
+### Production Server
+The bot runs on a production server accessible via:
+```bash
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee
+```
 
 ## Development Commands
 
@@ -42,6 +48,11 @@ curl http://127.0.0.1:3042/health
 curl -X POST http://127.0.0.1:3042/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"what is IRC?","user":"testuser","channel":"#test"}'
+
+# Test memory storage endpoint (no LLM response)
+curl -X POST http://127.0.0.1:3042/store \
+  -H "Content-Type: application/json" \
+  -d '{"message":"just storing this message","user":"testuser","channel":"#test"}'
 ```
 
 ### Eggdrop Testing
@@ -54,17 +65,19 @@ From Eggdrop DCC/partyline:
 
 ### Gateway (gateway/server.ts)
 - Single TypeScript file Express server with helmet security headers
-- Two endpoints:
+- Three endpoints:
   - `GET /health` - Health check (returns "OK")
-  - `POST /chat` - Main LLM endpoint
+  - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
+  - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
 - Request format: `{message: string, user: string, channel: string}`
 - Response: Plain text (not JSON) for easy Tcl parsing
-- Message limits: 1000 chars max input (trimmed to 500), 100 token responses
+- Message limits: 1000 chars max input (trimmed to 500), 300 token responses
 - Request body size limit: 10KB
-- API timeout: 30 seconds with AbortController
+- API timeout: 90 seconds with AbortController (for slow free tier models)
 - Security: Input validation, control character sanitization, localhost-only binding
 - Error handling returns HTTP error codes with plain text messages (no status code leakage)
 - Logs all requests with timestamp, user, channel, and token usage
+- Note: /chat does NOT store user message (already stored by Eggdrop via /store) to avoid duplication
 
 ### System Prompt Philosophy
 Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
@@ -76,16 +89,18 @@ Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
 When modifying bot behavior, edit this file rather than adding code logic.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
-- Triggers dynamically using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>` (string match in lines 36-42)
+- **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
+- **Response triggers**: Only responds when directly addressed using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>`
 - Uses `string match` instead of regex for security (prevents regex injection)
 - Uses Eggdrop's `$botnick` variable for generic trigger matching
 - Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
 - Rate limit storage: in-memory array `llmbot_last_request` keyed by `nick!channel`
 - Cleanup timer: runs every 5 minutes to clear old rate limit entries
 - Response size limit: 50KB max (configurable via `llmbot_max_response_size`)
-- JSON construction: uses `format` command for readability (lines 69-72)
+- JSON construction: uses `format` command for readability
 - IRC sanitization: removes control characters to prevent command injection
 - Error handling: catches HTTP failures and displays user-friendly messages
+- Async message storage: Uses fire-and-forget pattern with `/store` endpoint to avoid blocking channel flow
 
 ### Configuration
 Environment variables in `gateway/.env`:
@@ -93,10 +108,19 @@ Environment variables in `gateway/.env`:
 - `PORT` - Default 3042
 - `MODEL` - Default qwen/qwen3-4b:free
 - `REPO_URL` - Optional, GitHub repo URL for OpenRouter attribution
+- `DEBUG_LOG_REQUESTS` - Set to `true` to log full message arrays sent to OpenRouter (useful for debugging context/memory issues)
+
+Vector memory environment variables:
+- `MEMORY_ENABLED` - Set to `false` to disable vector memory (default: enabled)
+- `MEMORY_DB_PATH` - Database file path (default: `gateway/data/memory.db`)
+- `MEMORY_TOP_K` - Max similar messages to retrieve (default: 15)
+- `MEMORY_RECENT_COUNT` - Recent messages to include (default: 5)
+- `MEMORY_RETENTION_DAYS` - Delete messages older than N days, 0 = keep forever (default: 90)
 
 Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)
-- `llmbot_timeout` - HTTP timeout in ms (default: 15000)
+- `llmbot_store_gateway` - Memory storage URL (default: http://127.0.0.1:3042/store)
+- `llmbot_timeout` - HTTP timeout in ms (default: 100000 / 100 seconds)
 - `llmbot_rate_limit` - Seconds between requests per user (default: 10)
 - `llmbot_max_response_size` - Max response size in bytes (default: 50000)
 
@@ -136,7 +160,8 @@ Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 
 Gateway runs as localhost-only service (127.0.0.1):
 - No authentication needed (not exposed externally)
-- Use PM2 for process management (recommended)
+- Production runs as a systemd service from `/home/eggdrop/eggdrop-ai`
+- Use PM2 for process management (recommended alternative)
 - Or systemd service (see README.md lines 251-277)
 
 Eggdrop integration:
