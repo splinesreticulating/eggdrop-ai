@@ -7,14 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 - **Eggdrop Tcl script** (`eggdrop/eggdrop-ai.tcl`) - IRC bot that captures mentions and forwards to gateway
 - **Node.js/TypeScript gateway** (`gateway/server.ts`) - Express server that proxies requests to OpenRouter API
-- **OpenRouter integration** - Uses various LLM models (default: qwen/qwen3-4b:free, production: xiaomi/mimo-v2-flash:free)
+- **OpenRouter integration** - Uses various LLM models (production: arcee-ai/trinity-large-preview:free)
 
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
 
 ### Production Server
 The bot runs on a production server accessible via:
 ```bash
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server
 ```
 
 ## Development Commands
@@ -106,7 +106,7 @@ When modifying bot behavior, edit this file rather than adding code logic.
 Environment variables in `gateway/.env`:
 - `OPENROUTER_API_KEY` - Required, validated on startup (get from https://openrouter.ai/keys)
 - `PORT` - Default 3042
-- `MODEL` - Default qwen/qwen3-4b:free
+- `MODEL` - Current: arcee-ai/trinity-large-preview:free (see "Checking Available Models" section for alternatives)
 - `REPO_URL` - Optional, GitHub repo URL for OpenRouter attribution
 - `DEBUG_LOG_REQUESTS` - Set to `true` to log full message arrays sent to OpenRouter (useful for debugging context/memory issues)
 
@@ -149,6 +149,26 @@ Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 - 30 second timeout with AbortController
 - Response extraction: `data.choices[0].message.content`
 
+#### Checking Available Models
+To get a list of currently available models from OpenRouter:
+
+```bash
+# Get full model list (returns JSON)
+curl -s 'https://openrouter.ai/api/v1/models' | head -c 50000
+
+# Filter for free models only (pricing.prompt = "0")
+curl -s 'https://openrouter.ai/api/v1/models' | jq '.data[] | select(.pricing.prompt == "0") | {id: .id, name: .name, context: .context_length, expires: .expiration_date}'
+```
+
+**Note:** The OpenRouter web interface (https://openrouter.ai/models?max_price=0) uses client-side JavaScript rendering and won't work with `curl` or WebFetch. Always use the API endpoint directly.
+
+**Recommended free models for IRC bot (as of Jan 2026):**
+- `arcee-ai/trinity-large-preview:free` - 400B params (13B active), 131k context, no expiration
+- `nvidia/nemotron-3-nano-30b-a3b:free` - 30B params MoE, 256k context, no expiration
+- `liquid/lfm-2.5-1.2b-instruct:free` - 1.2B params, 32k context, fast but lower quality
+
+Free tier models can expire without notice. Check the API regularly when encountering 404 errors.
+
 ### TypeScript Configuration
 - Target: ES2022
 - Module: CommonJS (for Node.js compatibility)
@@ -164,7 +184,26 @@ Gateway runs as localhost-only service (127.0.0.1):
 - Use PM2 for process management (recommended alternative)
 - Or systemd service (see README.md lines 251-277)
 
-Eggdrop integration:
+### Production Service Management
+```bash
+# Restart the gateway service
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl restart eggdrop-ai-gateway.service"
+
+# Check service status
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl status eggdrop-ai-gateway.service"
+
+# View live logs
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop-ai-gateway.service -f"
+
+# View last 50 log lines
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop-ai-gateway.service -n 50"
+
+# Stop/start service
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl stop eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl start eggdrop-ai-gateway.service"
+```
+
+### Eggdrop Integration
 - Copy `eggdrop/eggdrop-ai.tcl` to eggdrop scripts directory
 - Add `source scripts/eggdrop-ai.tcl` to `eggdrop.conf`
 - Rehash with `.rehash` command
