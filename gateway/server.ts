@@ -127,11 +127,19 @@ app.post('/chat', async (req: Request, res: Response) => {
       ...contextMessages.map(msg => ({
         role: msg.role,
         content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
-      })),
-      // Append current message at the end to ensure it's included
-      // (The /store call from Eggdrop may or may not have completed yet)
-      { role: 'user', content: `${chatReq.user}: ${trimmedMessage}` }
+      }))
     ];
+
+    // Only append current message if it's not already the last message in context
+    // (The /store call from Eggdrop usually completes before /chat, so it's often already there)
+    const lastMessage = contextMessages[contextMessages.length - 1];
+    const currentMessageAlreadyInContext = lastMessage &&
+      lastMessage.user === chatReq.user &&
+      lastMessage.message === trimmedMessage;
+
+    if (!currentMessageAlreadyInContext) {
+      messages.push({ role: 'user', content: `${chatReq.user}: ${trimmedMessage}` });
+    }
 
     // Debug logging: log full request if enabled
     if (DEBUG_LOG_REQUESTS) {
