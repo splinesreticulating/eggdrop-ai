@@ -90,7 +90,7 @@ When modifying bot behavior, edit this file rather than adding code logic.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
-- **Response triggers**: Only responds when directly addressed using bot's nickname: `@<botnick> <message>` or `<botnick>: <message>`
+- **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey soonyo what's up?", "soonyo can you help?")
 - Uses `string match` instead of regex for security (prevents regex injection)
 - Uses Eggdrop's `$botnick` variable for generic trigger matching
 - Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
@@ -214,7 +214,7 @@ ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl start e
 Edit `gateway/system-prompt.txt`
 
 ### Changing trigger patterns
-Edit string match patterns in `eggdrop/eggdrop-ai.tcl` (lines 36-42). The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
+Edit string match pattern in `eggdrop/eggdrop-ai.tcl` (around line 42). Currently triggers when bot's nickname appears anywhere in message using `[string match "*${bot_lower}*" $text_lower]`. The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
 
 ### Adjusting rate limits
 Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 19)

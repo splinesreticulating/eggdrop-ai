@@ -39,10 +39,10 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
     set bot_lower [string tolower $botnick]
     set query ""
 
-    if {[string match "@${bot_lower}:*" $text_lower] || [string match "@${bot_lower} *" $text_lower]} {
-        set query [string trim [string range $text [expr {[string length $botnick] + 2}] end]]
-    } elseif {[string match "${bot_lower}:*" $text_lower]} {
-        set query [string trim [string range $text [expr {[string length $botnick] + 1}] end]]
+    # Check if bot's name appears anywhere in the message
+    if {[string match "*${bot_lower}*" $text_lower]} {
+        # Send the entire message as context
+        set query [string trim $text]
     } else {
         return 0
     }
