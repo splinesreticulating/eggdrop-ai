@@ -185,6 +185,8 @@ Gateway runs as localhost-only service (127.0.0.1):
 - Or systemd service (see README.md lines 251-277)
 
 ### Production Service Management
+
+**Gateway Service** (`eggdrop-ai-gateway.service`):
 ```bash
 # Restart the gateway service
 ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl restart eggdrop-ai-gateway.service"
@@ -203,10 +205,37 @@ ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl stop eg
 ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl start eggdrop-ai-gateway.service"
 ```
 
-### Eggdrop Integration
+**Eggdrop Bot Service** (`eggdrop.service`):
+
+The Eggdrop bot runs as a systemd service under the `eggdrop` user account. The Tcl script is sourced directly from the git repository (not copied), so updates only require pulling changes and restarting the service.
+
+```bash
+# Pull latest code changes
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo -u eggdrop bash -c 'cd /home/eggdrop/eggdrop-ai && git pull'"
+
+# Restart eggdrop bot (reloads all scripts including eggdrop-ai.tcl)
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl restart eggdrop.service"
+
+# Check eggdrop status
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl status eggdrop.service"
+
+# View eggdrop service logs
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop.service -n 50"
+
+# View eggdrop application logs
+ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo tail -50 /home/eggdrop/eggdrop/logs/eggdrop.log"
+```
+
+**Configuration:**
+- Eggdrop config: `/home/eggdrop/eggdrop/eggdrop.conf`
+- Script sourced from: `/home/eggdrop/eggdrop-ai/eggdrop/eggdrop-ai.tcl`
+- Bot runs under: `eggdrop` user account
+- Service type: `forking` (backgrounds automatically)
+
+### Eggdrop Integration (Development/Manual Setup)
 - Copy `eggdrop/eggdrop-ai.tcl` to eggdrop scripts directory
 - Add `source scripts/eggdrop-ai.tcl` to `eggdrop.conf`
-- Rehash with `.rehash` command
+- Rehash with `.rehash` command or send SIGHUP to process
 
 ## Common Modifications
 
