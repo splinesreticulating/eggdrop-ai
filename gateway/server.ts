@@ -194,14 +194,18 @@ app.post('/chat', async (req: Request, res: Response) => {
         console.log(`  → Tokens: ${data.usage.total_tokens} (prompt: ${data.usage.prompt_tokens}, completion: ${data.usage.completion_tokens})`);
       }
 
-      console.log(`  → Reply: ${sanitizeForLog(reply)}`);
+      // Strip any username prefix from the reply
+      // (LLM sometimes mimics the "user: message" format incorrectly)
+      const cleanedReply = reply.replace(/^[a-zA-Z0-9_\-]+:\s*/, '').trim();
+
+      console.log(`  → Reply: ${sanitizeForLog(cleanedReply)}`);
 
       // Store assistant response in vector memory (async, doesn't block)
-      memory.addMessage(chatReq.channel, 'assistant', reply, 'assistant').catch(err => {
+      memory.addMessage(chatReq.channel, 'assistant', cleanedReply, 'assistant').catch(err => {
         console.error('Failed to store assistant message:', err);
       });
 
-      res.type('text/plain').send(reply);
+      res.type('text/plain').send(cleanedReply);
 
     } catch (fetchError: unknown) {
       clearTimeout(timeoutId);
