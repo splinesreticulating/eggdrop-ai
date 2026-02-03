@@ -124,10 +124,15 @@ app.post('/chat', async (req: Request, res: Response) => {
     // Order: system prompt → historical context (chronological) → current message
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...contextMessages.map(msg => ({
-        role: msg.role,
-        content: msg.role === 'user' ? `${msg.user}: ${msg.message}` : msg.message
-      }))
+      ...contextMessages.map(msg => {
+        if (msg.role === 'user') {
+          return { role: msg.role, content: `${msg.user}: ${msg.message}` };
+        } else {
+          // Clean contaminated assistant messages (historical data with "soonyo:" prefix)
+          const cleanedContent = msg.message.replace(/^[a-zA-Z0-9_\-]+:\s*/, '').trim();
+          return { role: msg.role, content: cleanedContent };
+        }
+      })
     ];
 
     // Only append current message if it's not already the last message in context
