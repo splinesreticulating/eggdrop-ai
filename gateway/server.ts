@@ -13,6 +13,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = process.env.MODEL || 'qwen/qwen3-4b:free';
 const REPO_URL = process.env.REPO_URL || 'https://github.com/splinesreticulating/eggdrop-ai';
+const BOT_NAME = process.env.BOT_NAME || 'bot';
 const DEBUG_LOG_REQUESTS = process.env.DEBUG_LOG_REQUESTS === 'true';
 
 // Validate required configuration on startup
@@ -45,11 +46,11 @@ const MAX_TOKENS = 300;
 const TEMPERATURE = 0.7;
 const TOP_P = 0.9;
 
-// Load system prompt from file
+// Load system prompt from file and substitute bot name
 const SYSTEM_PROMPT = fs.readFileSync(
   path.join(__dirname, 'system-prompt.txt'),
   'utf-8'
-).trim();
+).trim().replace(/\{\{BOT_NAME\}\}/g, BOT_NAME);
 
 interface ChatRequest {
   message: string;

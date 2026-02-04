@@ -90,7 +90,7 @@ When modifying bot behavior, edit this file rather than adding code logic.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
-- **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey soonyo what's up?", "soonyo can you help?")
+- **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey botname what's up?", "botname can you help?")
 - Uses `string match` instead of regex for security (prevents regex injection)
 - Uses Eggdrop's `$botnick` variable for generic trigger matching
 - Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
@@ -106,6 +106,7 @@ When modifying bot behavior, edit this file rather than adding code logic.
 Environment variables in `gateway/.env`:
 - `OPENROUTER_API_KEY` - Required, validated on startup (get from https://openrouter.ai/keys)
 - `PORT` - Default 3042
+- `BOT_NAME` - Bot's IRC nickname, used in system prompt (default: bot)
 - `MODEL` - Current: arcee-ai/trinity-large-preview:free (see "Checking Available Models" section for alternatives)
 - `REPO_URL` - Optional, GitHub repo URL for OpenRouter attribution
 - `DEBUG_LOG_REQUESTS` - Set to `true` to log full message arrays sent to OpenRouter (useful for debugging context/memory issues)
