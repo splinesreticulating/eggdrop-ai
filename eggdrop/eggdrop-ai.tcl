@@ -26,9 +26,6 @@ array set llmbot_last_request {}
 # Bind to public channel messages
 bind pubm - * llmbot_pub_handler
 
-# Bind to join events for info line announcements
-bind join - "#robodisco.com *" llmbot_join_handler
-
 proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
 
@@ -69,35 +66,6 @@ proc llmbot_pub_handler {nick uhost hand chan text} {
 
     set llmbot_last_request($user_key) $now
     llmbot_query $nick $chan $query
-    return 0
-}
-
-proc llmbot_join_handler {nick uhost hand chan} {
-    global botnick
-
-    # Don't announce when the bot itself joins
-    if {$nick eq $botnick} {
-        return 0
-    }
-
-    # Only announce on #robodisco.com
-    if {[string tolower $chan] ne "#robodisco.com"} {
-        return 0
-    }
-
-    # Check if user has a handle and info line
-    if {$hand eq "*"} {
-        # User is not recognized, no handle
-        return 0
-    }
-
-    # Get user's info line
-    set info [getuser $hand INFO]
-
-    if {$info ne ""} {
-        putserv "PRIVMSG $chan :\[$nick\] $info"
-    }
-
     return 0
 }
 
