@@ -129,7 +129,7 @@ app.post('/chat', async (req: Request, res: Response) => {
         if (msg.role === 'user') {
           return { role: msg.role, content: `${msg.user}: ${msg.message}` };
         } else {
-          // Clean contaminated assistant messages (historical data with "soonyo:" prefix)
+          // Clean assistant messages that may have been stored with a bot name prefix
           const cleanedContent = msg.message.replace(/^[a-zA-Z0-9_\-]+:\s*/, '').trim();
           return { role: msg.role, content: cleanedContent };
         }

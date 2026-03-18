@@ -14,7 +14,7 @@ Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → 
 ### Production Server
 The bot runs on a production server accessible via:
 ```bash
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server
 ```
 
 ## Development Commands
@@ -193,20 +193,20 @@ Gateway runs as localhost-only service (127.0.0.1):
 **Gateway Service** (`eggdrop-ai-gateway.service`):
 ```bash
 # Restart the gateway service
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl restart eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl restart eggdrop-ai-gateway.service"
 
 # Check service status
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl status eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl status eggdrop-ai-gateway.service"
 
 # View live logs
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop-ai-gateway.service -f"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo journalctl -u eggdrop-ai-gateway.service -f"
 
 # View last 50 log lines
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop-ai-gateway.service -n 50"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo journalctl -u eggdrop-ai-gateway.service -n 50"
 
 # Stop/start service
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl stop eggdrop-ai-gateway.service"
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl start eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl stop eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl start eggdrop-ai-gateway.service"
 ```
 
 **Eggdrop Bot Service** (`eggdrop.service`):
@@ -215,19 +215,19 @@ The Eggdrop bot runs as a systemd service under the `eggdrop` user account. The 
 
 ```bash
 # Pull latest code changes
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo -u eggdrop bash -c 'cd /home/eggdrop/eggdrop-ai && git pull'"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo -u eggdrop bash -c 'cd /home/eggdrop/eggdrop-ai && git pull'"
 
 # Restart eggdrop bot (reloads all scripts including eggdrop-ai.tcl)
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl restart eggdrop.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl restart eggdrop.service"
 
 # Check eggdrop status
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl status eggdrop.service"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl status eggdrop.service"
 
 # View eggdrop service logs
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop.service -n 50"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo journalctl -u eggdrop.service -n 50"
 
 # View eggdrop application logs
-ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo tail -50 /home/eggdrop/eggdrop/logs/eggdrop.log"
+ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eggdrop/eggdrop/logs/eggdrop.log"
 ```
 
 **Configuration:**

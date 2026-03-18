@@ -9,7 +9,7 @@ Production now runs on Google Gemini 3 Flash Preview using OpenRouter's Bring Yo
 Bot nickname is now set via `BOT_NAME` environment variable and injected into the system prompt at startup. No more hardcoded names — deploy the same codebase for any bot.
 
 ### Smarter Trigger: Any Nickname Mention
-The bot now responds whenever its nickname appears anywhere in a message (e.g. "hey soonyo what's up?"), not just `@botname` or `botname:` prefixes. Uses `string match` for security (no regex injection).
+The bot now responds whenever its nickname appears anywhere in a message (e.g. "hey botname what's up?"), not just `@botname` or `botname:` prefixes. Uses `string match` for security (no regex injection).
 
 ### Bug Fixes
 - Fixed message duplication bug causing repetitive responses
