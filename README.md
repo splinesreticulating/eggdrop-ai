@@ -1,5 +1,7 @@
 # Eggdrop AI
 
+![Eggdrop AI](assets/banner.png)
+
 A production-ready system that adds LLM intelligence with vector memory to your Eggdrop IRC bot using OpenRouter's API.
 
 ## Architecture
