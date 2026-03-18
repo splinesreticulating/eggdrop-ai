@@ -7,14 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 - **Eggdrop Tcl script** (`eggdrop/eggdrop-ai.tcl`) - IRC bot that captures mentions and forwards to gateway
 - **Node.js/TypeScript gateway** (`gateway/server.ts`) - Express server that proxies requests to OpenRouter API
-- **OpenRouter integration** - Uses various LLM models (production: arcee-ai/trinity-large-preview:free)
+- **OpenRouter integration** - Uses various LLM models (production: google/gemini-3-flash-preview via BYOK)
 
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
 
 ### Production Server
 The bot runs on a production server accessible via:
 ```bash
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee
 ```
 
 ## Development Commands
@@ -107,7 +107,7 @@ Environment variables in `gateway/.env`:
 - `OPENROUTER_API_KEY` - Required, validated on startup (get from https://openrouter.ai/keys)
 - `PORT` - Default 3042
 - `BOT_NAME` - Bot's IRC nickname, used in system prompt (default: bot)
-- `MODEL` - Current: arcee-ai/trinity-large-preview:free (see "Checking Available Models" section for alternatives)
+- `MODEL` - Current: google/gemini-3-flash-preview (via Google Studio BYOK on OpenRouter; see "Checking Available Models" section for alternatives)
 - `REPO_URL` - Optional, GitHub repo URL for OpenRouter attribution
 - `DEBUG_LOG_REQUESTS` - Set to `true` to log full message arrays sent to OpenRouter (useful for debugging context/memory issues)
 
@@ -163,7 +163,10 @@ curl -s 'https://openrouter.ai/api/v1/models' | jq '.data[] | select(.pricing.pr
 
 **Note:** The OpenRouter web interface (https://openrouter.ai/models?max_price=0) uses client-side JavaScript rendering and won't work with `curl` or WebFetch. Always use the API endpoint directly.
 
-**Recommended free models for IRC bot (as of Jan 2026):**
+**Production model (as of Mar 2026):**
+- `google/gemini-3-flash-preview` - Used via OpenRouter BYOK with a Google Studio API key. Requires a small OpenRouter credit balance ($5) to unlock BYOK routing.
+
+**Recommended free fallback models:**
 - `arcee-ai/trinity-large-preview:free` - 400B params (13B active), 131k context, no expiration
 - `nvidia/nemotron-3-nano-30b-a3b:free` - 30B params MoE, 256k context, no expiration
 - `liquid/lfm-2.5-1.2b-instruct:free` - 1.2B params, 32k context, fast but lower quality
@@ -190,20 +193,20 @@ Gateway runs as localhost-only service (127.0.0.1):
 **Gateway Service** (`eggdrop-ai-gateway.service`):
 ```bash
 # Restart the gateway service
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl restart eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl restart eggdrop-ai-gateway.service"
 
 # Check service status
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl status eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl status eggdrop-ai-gateway.service"
 
 # View live logs
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop-ai-gateway.service -f"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop-ai-gateway.service -f"
 
 # View last 50 log lines
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop-ai-gateway.service -n 50"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop-ai-gateway.service -n 50"
 
 # Stop/start service
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl stop eggdrop-ai-gateway.service"
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl start eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl stop eggdrop-ai-gateway.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl start eggdrop-ai-gateway.service"
 ```
 
 **Eggdrop Bot Service** (`eggdrop.service`):
@@ -212,19 +215,19 @@ The Eggdrop bot runs as a systemd service under the `eggdrop` user account. The 
 
 ```bash
 # Pull latest code changes
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo -u eggdrop bash -c 'cd /home/eggdrop/eggdrop-ai && git pull'"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo -u eggdrop bash -c 'cd /home/eggdrop/eggdrop-ai && git pull'"
 
 # Restart eggdrop bot (reloads all scripts including eggdrop-ai.tcl)
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl restart eggdrop.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl restart eggdrop.service"
 
 # Check eggdrop status
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo systemctl status eggdrop.service"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo systemctl status eggdrop.service"
 
 # View eggdrop service logs
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo journalctl -u eggdrop.service -n 50"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo journalctl -u eggdrop.service -n 50"
 
 # View eggdrop application logs
-ssh -i ~/.ssh/prod-server.key -p 2112 ubuntu@prod-server "sudo tail -50 /home/eggdrop/eggdrop/logs/eggdrop.log"
+ssh -i ~/.ssh/manny-lee.key -p 2112 ubuntu@manny-lee "sudo tail -50 /home/eggdrop/eggdrop/logs/eggdrop.log"
 ```
 
 **Configuration:**

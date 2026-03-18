@@ -27,7 +27,7 @@ IRC User → Eggdrop Bot → Local Gateway (Node/TS) → OpenRouter API
 - **Hybrid context** - Combines recent messages + semantically similar messages
 - Per-user rate limiting (10s cooldown)
 - Error handling at every layer
-- Free tier model by default (qwen/qwen3-4b:free)
+- Google Gemini 3 Flash Preview in production (via OpenRouter BYOK)
 - Configurable message retention (default: 90 days)
 - Plain text responses for easy Tcl parsing
 
@@ -145,7 +145,7 @@ Users are rate-limited to prevent spam (10 second cooldown by default):
 |----------|---------|-------------|
 | `OPENROUTER_API_KEY` | _(required)_ | Your OpenRouter API key |
 | `PORT` | `3042` | Gateway HTTP port |
-| `MODEL` | `qwen/qwen3-4b:free` | OpenRouter model ID |
+| `MODEL` | `google/gemini-3-flash-preview` | OpenRouter model ID |
 | `REPO_URL` | _(optional)_ | GitHub repo URL for OpenRouter attribution |
 | `DEBUG_LOG_REQUESTS` | `false` | Log full message arrays sent to OpenRouter (for debugging context) |
 
@@ -159,12 +159,14 @@ Users are rate-limited to prevent spam (10 second cooldown by default):
 | `MEMORY_RECENT_COUNT` | `5` | Recent messages to include in context |
 | `MEMORY_RETENTION_DAYS` | `90` | Delete messages older than N days (0 = keep forever) |
 
-**Popular free models:**
-- `qwen/qwen3-4b:free` (default, fast and capable)
-- `xiaomi/mimo-v2-flash:free` (used in production)
-- `qwen/qwen-2.5-7b-instruct:free`
+**Production model:**
+- `google/gemini-3-flash-preview` — requires OpenRouter BYOK with a Google Studio API key + small credit balance (~$5)
+
+**Free fallback models:**
+- `arcee-ai/trinity-large-preview:free` (reliable, 400B params)
+- `nvidia/nemotron-3-nano-30b-a3b:free` (256k context)
+- `qwen/qwen3-4b:free` (fast and capable)
 - `meta-llama/llama-3.2-3b-instruct:free`
-- `google/gemma-2-9b-it:free`
 
 See all models: https://openrouter.ai/models?order=newest&supported_parameters=tools
 
@@ -362,16 +364,16 @@ sudo systemctl status eggdrop-ai-gateway
 Free tier models are rate-limited by OpenRouter. Monitor usage at:
 https://openrouter.ai/activity
 
-**Tips for staying in free tier:**
-- Use `qwen/qwen3-4b:free` (default) or `xiaomi/mimo-v2-flash:free`
-- Keep `max_tokens` low (currently 300)
-- Rate limiting in Tcl script helps prevent abuse
+**Production setup (BYOK):**
+- Add your Google Studio API key in OpenRouter's BYOK settings
+- Use `google/gemini-3-flash-preview` as the model
+- Requires a small OpenRouter credit balance (~$5) to unlock BYOK routing
 - Vector memory runs locally (no API costs)
 
 **Note:** With vector memory, each bot response includes context from past messages, which increases prompt tokens slightly but provides much better responses.
 
-**Paid models:**
-Update `MODEL` in `.env` to any OpenRouter model. Costs typically $0.001-0.01 per request.
+**Free fallback:**
+Switch `MODEL` in `.env` to `arcee-ai/trinity-large-preview:free` or any other free tier model if needed.
 
 ---
 
@@ -430,7 +432,7 @@ To add more features:
 
 ```bash
 # In gateway/.env
-MODEL=anthropic/claude-3-haiku
+MODEL=google/gemini-3-flash-preview
 
 # Restart gateway
 npm start
