@@ -43,7 +43,7 @@ const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
-const TEMPERATURE = 0.7;
+const TEMPERATURE = 0.8;
 const TOP_P = 0.9;
 
 // Load system prompt from file and substitute bot name
