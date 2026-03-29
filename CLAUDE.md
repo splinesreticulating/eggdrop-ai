@@ -84,6 +84,8 @@ Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
 - Extremely concise (1-2 sentences max)
 - No greetings, emojis, or verbosity
 - Direct answers only
+- Dry, sardonic wit — deadpan, not warm
+- Recognizes jokes and responds in kind without over-explaining
 - Optimized for IRC bandwidth constraints
 
 When modifying bot behavior, edit this file rather than adding code logic.
@@ -146,8 +148,8 @@ Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 - Authorization header with Bearer token
 - Custom headers: `HTTP-Referer` (from REPO_URL), `X-Title` for attribution
 - Messages array: system prompt + user message
-- Parameters: `max_tokens: 100`, `temperature: 0.7`, `top_p: 0.9` (constants lines 31-33)
-- 30 second timeout with AbortController
+- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (constants lines 45-47)
+- 90 second timeout with AbortController
 - Response extraction: `data.choices[0].message.content`
 
 #### Checking Available Models
@@ -256,10 +258,10 @@ Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 19)
 Set `MODEL` in `gateway/.env` to any OpenRouter model ID
 
 ### Increasing response length
-Edit `MAX_TOKENS` constant in `gateway/server.ts` (line 31) and update `gateway/system-prompt.txt` accordingly
+Edit `MAX_TOKENS` constant in `gateway/server.ts` (line 45) and update `gateway/system-prompt.txt` accordingly
 
 ### Adjusting security limits
-- Gateway input validation: Edit `MAX_MESSAGE_LENGTH`, `MAX_USER_LENGTH`, `MAX_CHANNEL_LENGTH` (lines 26-28)
-- Gateway message trimming: Edit `TRIM_MESSAGE_TO` (line 29)
-- Gateway timeout: Edit `API_TIMEOUT_MS` (line 30)
+- Gateway input validation: Edit `MAX_MESSAGE_LENGTH`, `MAX_USER_LENGTH`, `MAX_CHANNEL_LENGTH` (lines 40-42)
+- Gateway message trimming: Edit `TRIM_MESSAGE_TO` (line 43)
+- Gateway timeout: Edit `API_TIMEOUT_MS` (line 44)
 - Tcl response size: Edit `llmbot_max_response_size` (line 20)
