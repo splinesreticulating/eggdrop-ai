@@ -147,7 +147,7 @@ Tcl script manually constructs JSON (no library):
 Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 - Authorization header with Bearer token
 - Custom headers: `HTTP-Referer` (from REPO_URL), `X-Title` for attribution
-- Messages array: system prompt + user message
+- Messages array: system prompt + vector memory context (chronological) + current message
 - Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (constants lines 45-47)
 - 90 second timeout with AbortController
 - Response extraction: `data.choices[0].message.content`
