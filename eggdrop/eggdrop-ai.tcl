@@ -223,7 +223,7 @@ proc llmbot_deepthought {nick uhost hand chan text} {
         {I bet one legend that keeps recurring throughout history, in every culture, is the story of Popeye.} \
         {When I was a kid my favorite relative was Uncle Caveman. After school we'd all go play in his cave, and every once in a while he would eat one of us. It wasn't until later that I found out that Uncle Caveman was a bear.} \
         {I think a new, different kind of cooking oil would be great. Maybe something that smells like gasoline and has a rainbow sheen to it. Just to get people thinking.} \
-        {My young son asked me what happens after we die. I told him we get buried under a bunch of dirt and worms eat our bodies. I guess I should have told him the truth—that most of us go to Hell and burn eternally—but I didn't want to upset him.} \
+        {My young son asked me what happens after we die. I told him we get buried under a bunch of dirt and worms eat our bodies. I guess I should have told him the truth -- that most of us go to Hell and burn eternally -- but I didn't want to upset him.} \
         {Contrary to what most people say, the most dangerous animal in the world is not the lion or the tiger or even the elephant. It's a shark riding on an elephant's back, just trampling and eating everything they see.} \
         {If you're ever shipwrecked on a tropical island and you don't know how to speak the natives' language, just say "Poppy-oomy." I bet it means something.} \
         {I think there are probably more horses' asses in the world than there are horses, if you stop to think about it.} \
