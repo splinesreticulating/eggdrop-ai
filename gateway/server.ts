@@ -43,7 +43,7 @@ const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
-const SUMMARY_MAX_TOKENS = 500;
+const SUMMARY_MAX_TOKENS = 900;
 const TEMPERATURE = 0.8;
 const TOP_P = 0.9;
 
@@ -129,7 +129,7 @@ app.post('/summary', async (req: Request, res: Response) => {
     const summaryMessages = [
       {
         role: 'system',
-        content: 'Summarize the following IRC channel activity in 2-4 sentences. Be factual and concise. Focus on main topics and notable events.'
+        content: 'Summarize the following IRC channel activity in 2-4 sentences. Be factual and concise. Focus on main topics and notable events. Use plain text only — no markdown, no bold, no asterisks, no emphasis.'
       },
       {
         role: 'user',
