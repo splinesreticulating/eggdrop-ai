@@ -43,6 +43,7 @@ const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
+const SUMMARY_MAX_TOKENS = 500;
 const TEMPERATURE = 0.8;
 const TOP_P = 0.9;
 
@@ -99,6 +100,89 @@ app.post('/store', async (req: Request, res: Response) => {
     res.send('Stored');
   } catch (error) {
     console.error('Store endpoint error:', error);
+    res.status(500).send('Internal gateway error');
+  }
+});
+
+// Summary endpoint (time-based retrieval, no semantic search)
+app.post('/summary', async (req: Request, res: Response) => {
+  try {
+    const { channel, hours = 24 } = req.body as { channel: string; hours?: number };
+
+    if (!isValidString(channel, MAX_CHANNEL_LENGTH)) {
+      return res.status(400).send('Missing or invalid channel');
+    }
+
+    const sinceTimestamp = Date.now() - (hours * 60 * 60 * 1000);
+    const messages = await memory.getMessagesSince(channel, sinceTimestamp);
+
+    if (messages.length === 0) {
+      return res.type('text/plain').send(`No messages recorded in the last ${hours} hours.`);
+    }
+
+    // Build message log; cap total input at ~6000 chars (take from the end = most recent)
+    let messageLog = messages.map(m => `${m.user}: ${m.message}`).join('\n');
+    if (messageLog.length > 6000) {
+      messageLog = messageLog.slice(-6000);
+    }
+
+    const summaryMessages = [
+      {
+        role: 'system',
+        content: 'Summarize the following IRC channel activity in 2-4 sentences. Be factual and concise. Focus on main topics and notable events.'
+      },
+      {
+        role: 'user',
+        content: `Summarize the last ${hours} hours of activity in ${channel}:\n\n${messageLog}`
+      }
+    ];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(OPENROUTER_BASE_URL, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': REPO_URL,
+          'X-Title': 'Eggdrop AI Bot',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: summaryMessages,
+          max_tokens: SUMMARY_MAX_TOKENS,
+          temperature: TEMPERATURE,
+          top_p: TOP_P,
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`OpenRouter error (summary): ${response.status} - ${errorText}`);
+        return res.status(502).send('LLM service error');
+      }
+
+      const data = await response.json() as OpenRouterResponse;
+      const reply = data.choices?.[0]?.message?.content?.trim();
+
+      if (!reply) return res.status(502).send('Empty response from LLM');
+
+      console.log(`[${new Date().toISOString()}] /summary ${sanitizeForLog(channel)} (${messages.length} msgs, ${hours}h)`);
+      res.type('text/plain').send(reply);
+
+    } catch (fetchError: unknown) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        return res.status(504).send('LLM service timeout');
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('Summary endpoint error:', error);
     res.status(500).send('Internal gateway error');
   }
 });

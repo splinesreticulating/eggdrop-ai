@@ -268,6 +268,21 @@ export class VectorMemory {
     }
   }
 
+  async getMessagesSince(channel: string, sinceTimestamp: number): Promise<MemoryMessage[]> {
+    if (!this.options.enabled || !this.initialized || !this.db) {
+      return [];
+    }
+
+    try {
+      return this.db.prepare(
+        'SELECT id, channel, user, message, role, timestamp FROM messages WHERE channel = ? AND timestamp >= ? ORDER BY timestamp ASC'
+      ).all(channel, sinceTimestamp) as MemoryMessage[];
+    } catch (err) {
+      console.error('[VectorMemory] Failed to get messages since timestamp:', err);
+      return [];
+    }
+  }
+
   /**
    * Search for semantically similar messages using vector search
    */

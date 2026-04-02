@@ -16,6 +16,7 @@ package require http
 # Configuration
 set llmbot_gateway "http://127.0.0.1:3042/chat"
 set llmbot_store_gateway "http://127.0.0.1:3042/store"
+set llmbot_summary_gateway "http://127.0.0.1:3042/summary"
 set llmbot_timeout 100000 ;# 100 seconds for slow free tier models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
@@ -26,6 +27,7 @@ array set llmbot_last_request {}
 # Bind to public channel messages
 bind pubm - * llmbot_pub_handler
 bind pub - "!deepthought" llmbot_deepthought
+bind pub - "!summary" llmbot_summary
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
@@ -162,6 +164,51 @@ proc llmbot_cleanup {min hour day month year} {
     foreach key [array names llmbot_last_request] {
         if {$llmbot_last_request($key) < $cutoff} { unset llmbot_last_request($key) }
     }
+}
+
+proc llmbot_summary {nick uhost hand chan text} {
+    global llmbot_summary_gateway llmbot_timeout llmbot_last_request llmbot_rate_limit
+
+    # Rate limiting (reuse existing mechanism)
+    set now [clock seconds]
+    set user_key "${nick}!${chan}"
+    if {[info exists llmbot_last_request($user_key)]} {
+        set elapsed [expr {$now - $llmbot_last_request($user_key)}]
+        if {$elapsed < $llmbot_rate_limit} {
+            putserv "PRIVMSG $chan :$nick: please wait [expr {$llmbot_rate_limit - $elapsed}]s"
+            return 0
+        }
+    }
+    set llmbot_last_request($user_key) $now
+
+    set payload [format {{"channel":"%s"}} [llmbot_json_escape $chan]]
+
+    if {[catch {
+        set token [::http::geturl $llmbot_summary_gateway \
+            -query $payload \
+            -timeout $llmbot_timeout \
+            -type "application/json" \
+            -headers [list "Content-Type" "application/json"]]
+
+        set status [::http::status $token]
+        set ncode [::http::ncode $token]
+        set data [::http::data $token]
+        ::http::cleanup $token
+
+        if {$status eq "ok" && $ncode == 200} {
+            foreach line [split [llmbot_sanitize_irc $data] "\n"] {
+                set line [string trim $line]
+                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+            }
+        } else {
+            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
+            if {$safe_data eq ""} { set safe_data "(no response)" }
+            putserv "PRIVMSG $chan :$nick: summary error ($ncode): $safe_data"
+        }
+    } error]} {
+        putserv "PRIVMSG $chan :$nick: summary failed: [string range [llmbot_sanitize_irc $error] 0 100]"
+    }
+    return 0
 }
 
 proc llmbot_deepthought {nick uhost hand chan text} {
