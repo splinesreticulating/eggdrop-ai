@@ -181,7 +181,19 @@ proc llmbot_summary {nick uhost hand chan text} {
     }
     set llmbot_last_request($user_key) $now
 
-    set payload [format {{"channel":"%s"}} [llmbot_json_escape $chan]]
+    # Parse optional hours parameter (default 24, cap at 96)
+    set hours 24
+    set arg [string trim $text]
+    if {$arg ne ""} {
+        if {[string is integer -strict $arg] && $arg > 0} {
+            set hours [expr {min($arg, 96)}]
+        } else {
+            putserv "PRIVMSG $chan :$nick: usage: !summary \[hours\] (1-96)"
+            return 0
+        }
+    }
+
+    set payload [format {{"channel":"%s","hours":%d}} [llmbot_json_escape $chan] $hours]
 
     if {[catch {
         set token [::http::geturl $llmbot_summary_gateway \
