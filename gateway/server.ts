@@ -107,7 +107,7 @@ app.post('/store', async (req: Request, res: Response) => {
 // Summary endpoint (time-based retrieval, no semantic search)
 app.post('/summary', async (req: Request, res: Response) => {
   try {
-    const { channel, hours = 24 } = req.body as { channel: string; hours?: number };
+    const { channel, hours } = req.body as { channel: string; hours: number };
 
     if (!isValidString(channel, MAX_CHANNEL_LENGTH)) {
       return res.status(400).send('Missing or invalid channel');
