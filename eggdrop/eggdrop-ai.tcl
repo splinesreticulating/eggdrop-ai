@@ -28,6 +28,7 @@ array set llmbot_last_request {}
 bind pubm - * llmbot_pub_handler
 bind pub - "!deepthought" llmbot_deepthought
 bind pub - "!summary" llmbot_summary
+bind pub - "!help" llmbot_help
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
@@ -220,6 +221,16 @@ proc llmbot_summary {nick uhost hand chan text} {
     } error]} {
         putserv "PRIVMSG $chan :$nick: summary failed: [string range [llmbot_sanitize_irc $error] 0 100]"
     }
+    return 0
+}
+
+proc llmbot_help {nick uhost hand chan text} {
+    global botnick
+    putserv "PRIVMSG $chan :available commands:"
+    putserv "PRIVMSG $chan :  !help — show this message"
+    putserv "PRIVMSG $chan :  !summary \[hours\] — summarize recent channel activity (default: 24h, max: 96h)"
+    putserv "PRIVMSG $chan :  !deepthought — a random deep thought"
+    putserv "PRIVMSG $chan :  $botnick <message> — ask the bot a question"
     return 0
 }
 
