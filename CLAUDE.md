@@ -101,6 +101,7 @@ When modifying bot behavior, edit this file rather than adding code logic.
 - Response size limit: 50KB max (configurable via `llmbot_max_response_size`)
 - JSON construction: uses `format` command for readability
 - IRC sanitization: removes control characters to prevent command injection
+- **Use only ASCII in IRC messages**: non-ASCII characters (e.g. em dashes `—`, smart quotes) render as garbage (`ÔÇö`) in IRC clients — use plain equivalents (`-`, `'`) instead
 - Error handling: catches HTTP failures and displays user-friendly messages
 - Async message storage: Uses fire-and-forget pattern with `/store` endpoint to avoid blocking channel flow
 

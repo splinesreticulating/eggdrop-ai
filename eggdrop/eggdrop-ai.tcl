@@ -227,10 +227,10 @@ proc llmbot_summary {nick uhost hand chan text} {
 proc llmbot_help {nick uhost hand chan text} {
     global botnick
     putserv "PRIVMSG $chan :available commands:"
-    putserv "PRIVMSG $chan :  !help — show this message"
-    putserv "PRIVMSG $chan :  !summary \[hours\] — summarize recent channel activity (default: 24h, max: 96h)"
-    putserv "PRIVMSG $chan :  !deepthought — a random deep thought"
-    putserv "PRIVMSG $chan :  $botnick <message> — ask the bot a question"
+    putserv "PRIVMSG $chan :  !help - show this message"
+    putserv "PRIVMSG $chan :  !summary \[hours\] - summarize recent channel activity (default: 24h, max: 96h)"
+    putserv "PRIVMSG $chan :  !deepthought - a random deep thought"
+    putserv "PRIVMSG $chan :  $botnick <message> - ask the bot a question"
     return 0
 }
 
