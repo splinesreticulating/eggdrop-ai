@@ -12,10 +12,7 @@ Eggdrop AI is an LLM-powered IRC bot system with a minimal architecture:
 Flow: IRC User → Eggdrop → Local Gateway (port 3042) → OpenRouter API → Reply
 
 ### Production Server
-The bot runs on a production server accessible via:
-```bash
-ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server
-```
+The bot runs on a production server accessible via SSH. Real connection details are in Claude's memory, not here.
 
 ## Development Commands
 
@@ -65,10 +62,11 @@ From Eggdrop DCC/partyline:
 
 ### Gateway (gateway/server.ts)
 - Single TypeScript file Express server with helmet security headers
-- Three endpoints:
+- Four endpoints:
   - `GET /health` - Health check (returns "OK")
   - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
   - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
+  - `POST /summary` - Time-based channel summary via LLM (no semantic search, up to 96h, 1200 token limit)
 - Request format: `{message: string, user: string, channel: string}`
 - Response: Plain text (not JSON) for easy Tcl parsing
 - Message limits: 1000 chars max input (trimmed to 500), 300 token responses
@@ -80,19 +78,12 @@ From Eggdrop DCC/partyline:
 - Note: /chat does NOT store user message (already stored by Eggdrop via /store) to avoid duplication
 
 ### System Prompt Philosophy
-Bot personality is defined in `gateway/system-prompt.txt`. The bot is:
-- Extremely concise (1-2 sentences max)
-- No greetings, emojis, or verbosity
-- Direct answers only
-- Dry, sardonic wit — deadpan, not warm
-- Recognizes jokes and responds in kind without over-explaining
-- Optimized for IRC bandwidth constraints
-
-When modifying bot behavior, edit this file rather than adding code logic.
+Bot personality is defined in `gateway/system-prompt.txt`. Edit that file to change behavior — don't add code logic. Response rules (length, format) and personality traits are both in there. `{{BOT_NAME}}` is substituted at startup from the `BOT_NAME` env var.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
 - **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey botname what's up?", "botname can you help?")
+- **Commands**: `!help`, `!summary [hours]` (default 24h, max 96h), `!deepthought` (random Jack Handey quote)
 - Uses `string match` instead of regex for security (prevents regex injection)
 - Uses Eggdrop's `$botnick` variable for generic trigger matching
 - Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
@@ -124,6 +115,7 @@ Vector memory environment variables:
 Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)
 - `llmbot_store_gateway` - Memory storage URL (default: http://127.0.0.1:3042/store)
+- `llmbot_summary_gateway` - Summary URL (default: http://127.0.0.1:3042/summary)
 - `llmbot_timeout` - HTTP timeout in ms (default: 100000 / 100 seconds)
 - `llmbot_rate_limit` - Seconds between requests per user (default: 10)
 - `llmbot_max_response_size` - Max response size in bytes (default: 50000)
@@ -149,7 +141,7 @@ Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 - Authorization header with Bearer token
 - Custom headers: `HTTP-Referer` (from REPO_URL), `X-Title` for attribution
 - Messages array: system prompt + vector memory context (chronological) + current message
-- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (constants lines 45-47)
+- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (constants lines 45-48; summary uses `SUMMARY_MAX_TOKENS: 1200` at line 46)
 - 90 second timeout with AbortController
 - Response extraction: `data.choices[0].message.content`
 
@@ -250,10 +242,10 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eg
 Edit `gateway/system-prompt.txt`
 
 ### Changing trigger patterns
-Edit string match pattern in `eggdrop/eggdrop-ai.tcl` (around line 42). Currently triggers when bot's nickname appears anywhere in message using `[string match "*${bot_lower}*" $text_lower]`. The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
+Edit string match pattern in `eggdrop/eggdrop-ai.tcl` (around line 47). Currently triggers when bot's nickname appears anywhere in message using `[string match "*${bot_lower}*" $text_lower]`. The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
 
 ### Adjusting rate limits
-Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 19)
+Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 21)
 
 ### Switching LLM models
 Set `MODEL` in `gateway/.env` to any OpenRouter model ID
@@ -265,4 +257,4 @@ Edit `MAX_TOKENS` constant in `gateway/server.ts` (line 45) and update `gateway/
 - Gateway input validation: Edit `MAX_MESSAGE_LENGTH`, `MAX_USER_LENGTH`, `MAX_CHANNEL_LENGTH` (lines 40-42)
 - Gateway message trimming: Edit `TRIM_MESSAGE_TO` (line 43)
 - Gateway timeout: Edit `API_TIMEOUT_MS` (line 44)
-- Tcl response size: Edit `llmbot_max_response_size` (line 20)
+- Tcl response size: Edit `llmbot_max_response_size` (line 22)
