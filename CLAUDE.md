@@ -61,7 +61,7 @@ From Eggdrop DCC/partyline:
 ## Architecture Details
 
 ### Gateway (gateway/server.ts)
-- Single TypeScript file Express server with helmet security headers
+- Entry point `server.ts`; vector memory module in `memory.ts`
 - Four endpoints:
   - `GET /health` - Health check (returns "OK")
   - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
