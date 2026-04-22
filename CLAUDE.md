@@ -26,13 +26,13 @@ npm install
 # Development mode (auto-reload)
 npm run dev
 
-# Production mode
+# Run server directly via tsx (no build step)
 npm start
 
-# Build TypeScript to JavaScript
+# Build TypeScript to compiled JS
 npm run build
 
-# Run compiled JS
+# Run compiled JS (after build)
 npm run serve
 ```
 
@@ -67,14 +67,12 @@ From Eggdrop DCC/partyline:
   - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
   - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
   - `POST /summary` - Time-based channel summary via LLM (no semantic search, up to 96h, 1200 token limit)
-- Request format: `{message: string, user: string, channel: string}`
+- Request format: `{message, user, channel}` for /chat and /store; `{channel, hours}` for /summary
 - Response: Plain text (not JSON) for easy Tcl parsing
 - Message limits: 1000 chars max input (trimmed to 500), 300 token responses
 - Request body size limit: 10KB
 - API timeout: 90 seconds with AbortController (for slow free tier models)
-- Security: Input validation, control character sanitization, localhost-only binding
-- Error handling returns HTTP error codes with plain text messages (no status code leakage)
-- Logs all requests with timestamp, user, channel, and token usage
+- Error handling: plain text error bodies, no internal status code leakage
 - Note: /chat does NOT store user message (already stored by Eggdrop via /store) to avoid duplication
 
 ### System Prompt Philosophy
@@ -84,17 +82,11 @@ Bot personality is defined in `gateway/system-prompt.txt`. Edit that file to cha
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
 - **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey botname what's up?", "botname can you help?")
 - **Commands**: `!help`, `!summary [hours]` (default 24h, max 96h), `!deepthought` (random Jack Handey quote)
-- Uses `string match` instead of regex for security (prevents regex injection)
-- Uses Eggdrop's `$botnick` variable for generic trigger matching
-- Per-user rate limiting: 10s cooldown (configurable via `llmbot_rate_limit`)
-- Rate limit storage: in-memory array `llmbot_last_request` keyed by `nick!channel`
-- Cleanup timer: runs every 5 minutes to clear old rate limit entries
+- Uses `string match` not regex for trigger matching (prevents regex injection)
+- Rate limiting is in the Tcl script, not the gateway — per-user, per-channel (configurable via `llmbot_rate_limit`)
 - Response size limit: 50KB max (configurable via `llmbot_max_response_size`)
-- JSON construction: uses `format` command for readability
-- IRC sanitization: removes control characters to prevent command injection
 - **Use only ASCII in IRC messages**: non-ASCII characters (e.g. em dashes `—`, smart quotes) render as garbage (`ÔÇö`) in IRC clients — use plain equivalents (`-`, `'`) instead
-- Error handling: catches HTTP failures and displays user-friendly messages
-- Async message storage: Uses fire-and-forget pattern with `/store` endpoint to avoid blocking channel flow
+- Async message storage: fire-and-forget to `/store` so channel flow isn't blocked waiting for the LLM
 
 ### Configuration
 Environment variables in `gateway/.env`:
@@ -122,28 +114,10 @@ Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 
 ## Key Implementation Details
 
-### Rate Limiting
-Implemented in Tcl, not gateway:
-- Per-user, per-channel tracking
-- Uses `clock seconds` for timing
-- Responds with "please wait Xs" message when triggered
-- Array cleanup runs every 5 minutes via `bind time`
-
-### JSON Handling
-Tcl script manually constructs JSON (no library):
-- Escapes: `\ " \n \r \t \f \b` using `string map`
-- Removes control characters (0x00-0x1F) with regsub
-- Builds payload using `format` command for readability
-- Gateway uses Express built-in `express.json()` middleware with 10KB limit
-
 ### OpenRouter Integration
 Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
-- Authorization header with Bearer token
-- Custom headers: `HTTP-Referer` (from REPO_URL), `X-Title` for attribution
 - Messages array: system prompt + vector memory context (chronological) + current message
-- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (constants lines 45-48; summary uses `SUMMARY_MAX_TOKENS: 1200` at line 46)
-- 90 second timeout with AbortController
-- Response extraction: `data.choices[0].message.content`
+- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (`server.ts:45-48`); summary uses `SUMMARY_MAX_TOKENS: 1200` (`server.ts:46`)
 
 #### Checking Available Models
 To get a list of currently available models from OpenRouter:
@@ -168,20 +142,9 @@ curl -s 'https://openrouter.ai/api/v1/models' | jq '.data[] | select(.pricing.pr
 
 Free tier models can expire without notice. Check the API regularly when encountering 404 errors.
 
-### TypeScript Configuration
-- Target: ES2022
-- Module: CommonJS (for Node.js compatibility)
-- Strict mode enabled
-- Output: `dist/` directory
-- Includes only root-level `*.ts` files
-
 ## Production Deployment
 
-Gateway runs as localhost-only service (127.0.0.1):
-- No authentication needed (not exposed externally)
-- Production runs as a systemd service from `/home/eggdrop/eggdrop-ai`
-- Use PM2 for process management (recommended alternative)
-- Or systemd service (see README.md lines 251-277)
+Gateway runs as localhost-only service (127.0.0.1) — no auth needed. Production runs as a systemd service from `/home/eggdrop/eggdrop-ai`.
 
 ### Production Service Management
 
@@ -205,8 +168,7 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo systemctl start e
 ```
 
 **Eggdrop Bot Service** (`eggdrop.service`):
-
-The Eggdrop bot runs as a systemd service under the `eggdrop` user account. The Tcl script is sourced directly from the git repository (not copied), so updates only require pulling changes and restarting the service.
+The Tcl script is sourced directly from the git repo — updates only require `git pull` + restart, no copy step.
 
 ```bash
 # Pull latest code changes
@@ -231,18 +193,10 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eg
 - Bot runs under: `eggdrop` user account
 - Service type: `forking` (backgrounds automatically)
 
-### Eggdrop Integration (Development/Manual Setup)
-- Copy `eggdrop/eggdrop-ai.tcl` to eggdrop scripts directory
-- Add `source scripts/eggdrop-ai.tcl` to `eggdrop.conf`
-- Rehash with `.rehash` command or send SIGHUP to process
-
 ## Common Modifications
 
-### Changing bot personality
-Edit `gateway/system-prompt.txt`
-
 ### Changing trigger patterns
-Edit string match pattern in `eggdrop/eggdrop-ai.tcl` (around line 47). Currently triggers when bot's nickname appears anywhere in message using `[string match "*${bot_lower}*" $text_lower]`. The script uses `$botnick` variable to automatically match the bot's configured nickname. Uses `string match` instead of regex for security.
+Edit `eggdrop/eggdrop-ai.tcl` around line 47. Uses `string match` (not regex) for security — `$botnick` matches the bot's configured nick anywhere in the message.
 
 ### Adjusting rate limits
 Edit `llmbot_rate_limit` in `eggdrop/eggdrop-ai.tcl` (line 21)
