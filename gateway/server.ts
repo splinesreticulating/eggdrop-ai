@@ -46,6 +46,7 @@ const MAX_TOKENS = 300;
 const SUMMARY_MAX_TOKENS = 1200;
 const TEMPERATURE = 0.8;
 const TOP_P = 0.9;
+const FREQUENCY_PENALTY = 0.4;
 
 // Load system prompt from file and substitute bot name
 const SYSTEM_PROMPT = fs.readFileSync(
@@ -156,6 +157,7 @@ app.post('/summary', async (req: Request, res: Response) => {
           max_tokens: SUMMARY_MAX_TOKENS,
           temperature: TEMPERATURE,
           top_p: TOP_P,
+          frequency_penalty: FREQUENCY_PENALTY,
         }),
       });
       clearTimeout(timeoutId);
@@ -262,6 +264,7 @@ app.post('/chat', async (req: Request, res: Response) => {
           max_tokens: MAX_TOKENS,
           temperature: TEMPERATURE,
           top_p: TOP_P,
+          frequency_penalty: FREQUENCY_PENALTY,
         }),
       });
       clearTimeout(timeoutId);
