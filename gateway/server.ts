@@ -44,9 +44,9 @@ const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
 const SUMMARY_MAX_TOKENS = 1200;
-const TEMPERATURE = 0.8;
-const TOP_P = 0.9;
-const FREQUENCY_PENALTY = 0.4;
+const TEMPERATURE = 1.2;
+const TOP_P = 1.0;
+const FREQUENCY_PENALTY = 0.8;
 
 // Load system prompt from file and substitute bot name
 const SYSTEM_PROMPT = fs.readFileSync(
