@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import Database from 'better-sqlite3';
 import { VectorMemory } from './memory';
 
 dotenv.config();
@@ -47,6 +48,8 @@ const SUMMARY_MAX_TOKENS = 1200;
 const TEMPERATURE = 1.2;
 const TOP_P = 1.0;
 const FREQUENCY_PENALTY = 0.8;
+const BASH_DB_PATH = process.env.BASH_DB_PATH || path.join(__dirname, 'data', 'bash-quotes.db');
+const BASH_MAX_LINES = 8;
 
 // Load system prompt from file and substitute bot name
 const SYSTEM_PROMPT = fs.readFileSync(
@@ -78,9 +81,59 @@ const validateRequest = (req: ChatRequest): string | null => {
   return null;
 };
 
+// Bash quotes db (lazy-initialized on first /bash request)
+let bashDb: Database.Database | null = null;
+function getBashDb(): Database.Database {
+  if (!bashDb) {
+    if (!fs.existsSync(BASH_DB_PATH)) {
+      throw new Error('bash-quotes.db not found. Run: cd gateway && node import-bash-quotes.js');
+    }
+    bashDb = new Database(BASH_DB_PATH, { readonly: true });
+  }
+  return bashDb;
+}
+
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.send('OK');
+});
+
+// Bash.org quote endpoint
+app.post('/bash', (req: Request, res: Response) => {
+  const { subcommand = 'random', arg = '' } = req.body as { subcommand?: string; arg?: string };
+  try {
+    const db = getBashDb();
+    type QuoteRow = { id: number; score: number; quote: string };
+    let row: QuoteRow | undefined;
+
+    if (subcommand === 'random') {
+      row = db.prepare('SELECT id, score, quote FROM quotes ORDER BY RANDOM() LIMIT 1').get() as QuoteRow;
+    } else if (subcommand === 'top') {
+      const top = db.prepare('SELECT id, score, quote FROM quotes ORDER BY score DESC LIMIT 100').all() as QuoteRow[];
+      row = top[Math.floor(Math.random() * top.length)];
+    } else if (subcommand === 'id') {
+      const id = parseInt(arg, 10);
+      if (isNaN(id)) return res.status(400).send('Invalid quote ID');
+      row = db.prepare('SELECT id, score, quote FROM quotes WHERE id = ?').get(id) as QuoteRow;
+    } else if (subcommand === 'search') {
+      if (!arg.trim()) return res.status(400).send('Search term required');
+      row = db.prepare("SELECT id, score, quote FROM quotes WHERE quote LIKE ? ORDER BY score DESC LIMIT 1").get(`%${arg}%`) as QuoteRow;
+    } else {
+      return res.status(400).send('Unknown subcommand');
+    }
+
+    if (!row) return res.send('No quote found.');
+
+    const lines = row.quote.split('\n').filter((l: string) => l.trim());
+    const capped = lines.slice(0, BASH_MAX_LINES);
+    const extra = lines.length - BASH_MAX_LINES;
+    const parts = [`bash.org #${row.id} [score: ${row.score}]`, ...capped];
+    if (extra > 0) parts.push(`[+${extra} more lines]`);
+    res.send(parts.join('\n'));
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'bash quote error';
+    res.status(500).send(msg);
+  }
 });
 
 // Store message endpoint (no LLM response, just memory storage)

@@ -17,6 +17,7 @@ package require http
 set llmbot_gateway "http://127.0.0.1:3042/chat"
 set llmbot_store_gateway "http://127.0.0.1:3042/store"
 set llmbot_summary_gateway "http://127.0.0.1:3042/summary"
+set llmbot_bash_gateway "http://127.0.0.1:3042/bash"
 set llmbot_timeout 100000 ;# 100 seconds for slow free tier models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
@@ -28,6 +29,7 @@ array set llmbot_last_request {}
 bind pubm - * llmbot_pub_handler
 bind pub - "!deepthought" llmbot_deepthought
 bind pub - "!summary" llmbot_summary
+bind pub - "!bash" llmbot_bash
 bind pub - "!help" llmbot_help
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
@@ -224,11 +226,88 @@ proc llmbot_summary {nick uhost hand chan text} {
     return 0
 }
 
+proc llmbot_bash {nick uhost hand chan text} {
+    global llmbot_bash_gateway llmbot_timeout llmbot_last_request llmbot_rate_limit
+
+    set now [clock seconds]
+    set user_key "${nick}!${chan}"
+    if {[info exists llmbot_last_request($user_key)]} {
+        set elapsed [expr {$now - $llmbot_last_request($user_key)}]
+        if {$elapsed < $llmbot_rate_limit} {
+            putserv "PRIVMSG $chan :$nick: please wait [expr {$llmbot_rate_limit - $elapsed}]s"
+            return 0
+        }
+    }
+    set llmbot_last_request($user_key) $now
+
+    set arg [string trim $text]
+    set arg_lower [string tolower $arg]
+    set subcommand "random"
+    set subcmd_arg ""
+
+    if {$arg eq "" || $arg_lower eq "random"} {
+        set subcommand "random"
+    } elseif {$arg_lower eq "top"} {
+        set subcommand "top"
+    } elseif {[string match "#*" $arg]} {
+        set id_part [string range $arg 1 end]
+        if {[string is integer -strict $id_part] && $id_part > 0} {
+            set subcommand "id"
+            set subcmd_arg $id_part
+        } else {
+            putserv "PRIVMSG $chan :$nick: usage: !bash \[random|top|search <term>|#id\]"
+            return 0
+        }
+    } elseif {[string match "search *" $arg_lower]} {
+        set subcmd_arg [string trim [string range $arg 7 end]]
+        if {$subcmd_arg eq ""} {
+            putserv "PRIVMSG $chan :$nick: usage: !bash search <term>"
+            return 0
+        }
+        set subcommand "search"
+    } else {
+        putserv "PRIVMSG $chan :$nick: usage: !bash \[random|top|search <term>|#id\]"
+        return 0
+    }
+
+    set payload [format {{"subcommand":"%s","arg":"%s"}} \
+        [llmbot_json_escape $subcommand] \
+        [llmbot_json_escape $subcmd_arg]]
+
+    if {[catch {
+        set token [::http::geturl $llmbot_bash_gateway \
+            -query $payload \
+            -timeout $llmbot_timeout \
+            -type "application/json" \
+            -headers [list "Content-Type" "application/json"]]
+
+        set status [::http::status $token]
+        set ncode [::http::ncode $token]
+        set data [::http::data $token]
+        ::http::cleanup $token
+
+        if {$status eq "ok" && $ncode == 200} {
+            foreach line [split $data "\n"] {
+                set line [string trim [llmbot_sanitize_irc $line]]
+                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+            }
+        } else {
+            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
+            if {$safe_data eq ""} { set safe_data "(no response)" }
+            putserv "PRIVMSG $chan :$nick: bash error ($ncode): $safe_data"
+        }
+    } error]} {
+        putserv "PRIVMSG $chan :$nick: bash failed: [string range [llmbot_sanitize_irc $error] 0 100]"
+    }
+    return 0
+}
+
 proc llmbot_help {nick uhost hand chan text} {
     global botnick
     putserv "PRIVMSG $chan :available commands:"
     putserv "PRIVMSG $chan :  !help - show this message"
     putserv "PRIVMSG $chan :  !summary \[hours\] - summarize recent channel activity (default: 24h, max: 96h)"
+    putserv "PRIVMSG $chan :  !bash \[random|top|search <term>|#id\] - bash.org quote"
     putserv "PRIVMSG $chan :  !deepthought - a random deep thought"
     putserv "PRIVMSG $chan :  $botnick <message> - ask the bot a question"
     return 0
