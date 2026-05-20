@@ -49,7 +49,6 @@ const TEMPERATURE = 1.2;
 const TOP_P = 1.0;
 const FREQUENCY_PENALTY = 0.8;
 const BASH_DB_PATH = process.env.BASH_DB_PATH || path.join(__dirname, 'data', 'bash-quotes.db');
-const BASH_MAX_LINES = 8;
 
 // Load system prompt from file and substitute bot name
 const SYSTEM_PROMPT = fs.readFileSync(
@@ -125,11 +124,7 @@ app.post('/bash', (req: Request, res: Response) => {
     if (!row) return res.send('No quote found.');
 
     const lines = row.quote.split('\n').filter((l: string) => l.trim());
-    const capped = lines.slice(0, BASH_MAX_LINES);
-    const extra = lines.length - BASH_MAX_LINES;
-    const parts = [`bash.org #${row.id} [score: ${row.score}]`, ...capped];
-    if (extra > 0) parts.push(`[+${extra} more lines]`);
-    res.send(parts.join('\n'));
+    res.send([`bash.org #${row.id} [score: ${row.score}]`, ...lines].join('\n'));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'bash quote error';
     res.status(500).send(msg);
