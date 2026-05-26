@@ -105,18 +105,31 @@ app.post('/bash', (req: Request, res: Response) => {
     type QuoteRow = { id: number; score: number; quote: string };
     let row: QuoteRow | undefined;
 
+    const IRC_MAX_LINES = 15;
+    const IRC_MAX_CHARS = 600;
+    const isFitForIRC = (q: QuoteRow) => {
+      const lines = q.quote.split('\n').filter((l: string) => l.trim());
+      return lines.length <= IRC_MAX_LINES && q.quote.length <= IRC_MAX_CHARS;
+    };
+
     if (subcommand === 'random') {
-      row = db.prepare('SELECT id, score, quote FROM quotes ORDER BY RANDOM() LIMIT 1').get() as QuoteRow;
+      for (let i = 0; i < 10; i++) {
+        const candidate = db.prepare('SELECT id, score, quote FROM quotes ORDER BY RANDOM() LIMIT 1').get() as QuoteRow;
+        if (isFitForIRC(candidate)) { row = candidate; break; }
+      }
     } else if (subcommand === 'top') {
       const top = db.prepare('SELECT id, score, quote FROM quotes ORDER BY score DESC LIMIT 100').all() as QuoteRow[];
-      row = top[Math.floor(Math.random() * top.length)];
+      const candidates = top.filter(isFitForIRC);
+      if (candidates.length) row = candidates[Math.floor(Math.random() * candidates.length)];
     } else if (subcommand === 'id') {
       const id = parseInt(arg, 10);
       if (isNaN(id)) return res.status(400).send('Invalid quote ID');
-      row = db.prepare('SELECT id, score, quote FROM quotes WHERE id = ?').get(id) as QuoteRow;
+      const candidate = db.prepare('SELECT id, score, quote FROM quotes WHERE id = ?').get(id) as QuoteRow;
+      if (candidate && isFitForIRC(candidate)) row = candidate;
     } else if (subcommand === 'search') {
       if (!arg.trim()) return res.status(400).send('Search term required');
-      row = db.prepare("SELECT id, score, quote FROM quotes WHERE quote LIKE ? ORDER BY score DESC LIMIT 1").get(`%${arg}%`) as QuoteRow;
+      const candidate = db.prepare("SELECT id, score, quote FROM quotes WHERE quote LIKE ? ORDER BY score DESC LIMIT 1").get(`%${arg}%`) as QuoteRow;
+      if (candidate && isFitForIRC(candidate)) row = candidate;
     } else {
       return res.status(400).send('Unknown subcommand');
     }
