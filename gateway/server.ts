@@ -45,6 +45,7 @@ const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
 const SUMMARY_MAX_TOKENS = 1200;
+const HAIKU_MAX_TOKENS = 100;
 const TEMPERATURE = 1.2;
 const TOP_P = 1.0;
 const FREQUENCY_PENALTY = 0.8;
@@ -246,6 +247,92 @@ app.post('/summary', async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error('Summary endpoint error:', error);
+    res.status(500).send('Internal gateway error');
+  }
+});
+
+// Haiku endpoint (time-based; distills recent channel activity into a 5-7-5 haiku)
+app.post('/haiku', async (req: Request, res: Response) => {
+  try {
+    const { channel, hours } = req.body as { channel: string; hours?: number };
+
+    if (!isValidString(channel, MAX_CHANNEL_LENGTH)) {
+      return res.status(400).send('Missing or invalid channel');
+    }
+
+    const windowHours = typeof hours === 'number' && hours > 0 && hours <= 96 ? hours : 24;
+    const sinceTimestamp = Date.now() - (windowHours * 60 * 60 * 1000);
+    const messages = await memory.getMessagesSince(channel, sinceTimestamp);
+
+    // Nothing to versify — 204 so the caller can stay silent rather than post filler
+    if (messages.length === 0) {
+      return res.status(204).end();
+    }
+
+    // Build message log; cap total input at ~6000 chars (take from the end = most recent)
+    let messageLog = messages.map(m => `${m.user}: ${m.message}`).join('\n');
+    if (messageLog.length > 6000) {
+      messageLog = messageLog.slice(-6000);
+    }
+
+    const haikuMessages = [
+      {
+        role: 'system',
+        content: 'You are a haiku poet. Read the IRC channel log and distill its mood and topics into a single haiku: exactly three lines, 5-7-5 syllables, no title, no rhyme, no commentary, no quotation marks, no numbering. Output only the three lines. Use plain ASCII characters only -- no emojis, no smart quotes, no em dashes.'
+      },
+      {
+        role: 'user',
+        content: `Write a haiku capturing the last ${windowHours} hours in ${channel}:\n\n${messageLog}`
+      }
+    ];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(OPENROUTER_BASE_URL, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': REPO_URL,
+          'X-Title': 'Eggdrop AI Bot',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: haikuMessages,
+          max_tokens: HAIKU_MAX_TOKENS,
+          temperature: TEMPERATURE,
+          top_p: TOP_P,
+          frequency_penalty: FREQUENCY_PENALTY,
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`OpenRouter error (haiku): ${response.status} - ${errorText}`);
+        return res.status(502).send('LLM service error');
+      }
+
+      const data = await response.json() as OpenRouterResponse;
+      const reply = data.choices?.[0]?.message?.content?.trim();
+
+      if (!reply) return res.status(502).send('Empty response from LLM');
+
+      console.log(`[${new Date().toISOString()}] /haiku ${sanitizeForLog(channel)} (${messages.length} msgs, ${windowHours}h)`);
+      res.type('text/plain').send(reply);
+
+    } catch (fetchError: unknown) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        return res.status(504).send('LLM service timeout');
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('Haiku endpoint error:', error);
     res.status(500).send('Internal gateway error');
   }
 });

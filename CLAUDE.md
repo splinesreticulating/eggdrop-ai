@@ -67,7 +67,8 @@ From Eggdrop DCC/partyline:
   - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
   - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
   - `POST /summary` - Time-based channel summary via LLM (no semantic search, up to 96h, 1200 token limit)
-- Request format: `{message, user, channel}` for /chat and /store; `{channel, hours}` for /summary
+  - `POST /haiku` - Time-based 5-7-5 haiku distilled from recent activity (default 24h, max 96h, 100 token limit); returns `204 No Content` when the channel had no messages in the window
+- Request format: `{message, user, channel}` for /chat and /store; `{channel, hours}` for /summary and /haiku (hours optional for /haiku, default 24)
 - Response: Plain text (not JSON) for easy Tcl parsing
 - Message limits: 1000 chars max input (trimmed to 500), 300 token responses
 - Request body size limit: 10KB
@@ -81,7 +82,8 @@ Bot personality is defined in `gateway/system-prompt.txt`. Edit that file to cha
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
 - **Response triggers**: Responds when bot's nickname is mentioned anywhere in the message (e.g., "hey botname what's up?", "botname can you help?")
-- **Commands**: `!help`, `!summary [hours]` (default 24h, max 96h), `!deepthought` (random Jack Handey quote)
+- **Commands**: `!help`, `!summary [hours]` (default 24h, max 96h), `!haiku` (haiku from last 24h), `!bash`, `!deepthought` (random Jack Handey quote)
+- **Daily haiku**: a `bind time` fires `llmbot_daily_haiku` once a day (default 09:00 server time) to post a haiku from the last 24h to `llmbot_haiku_channel`. A silent day stays silent (gateway returns 204). Time mask format is `"minute hour day month year"` (eggdrop glob, 2-digit min/hour) — NOT cron; the 5th field is year, not weekday.
 - Uses `string match` not regex for trigger matching (prevents regex injection)
 - Rate limiting is in the Tcl script, not the gateway — per-user, per-channel (configurable via `llmbot_rate_limit`)
 - Response size limit: 50KB max (configurable via `llmbot_max_response_size`)
@@ -108,6 +110,9 @@ Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_gateway` - Gateway URL (default: http://127.0.0.1:3042/chat)
 - `llmbot_store_gateway` - Memory storage URL (default: http://127.0.0.1:3042/store)
 - `llmbot_summary_gateway` - Summary URL (default: http://127.0.0.1:3042/summary)
+- `llmbot_haiku_gateway` - Haiku URL (default: http://127.0.0.1:3042/haiku)
+- `llmbot_haiku_channel` - Channel the daily haiku posts to (default: #robodisco.com)
+- `llmbot_haiku_time` - Daily haiku time mask, `"minute hour day month year"` (default: `"00 09 * * *"` = 09:00 server time)
 - `llmbot_timeout` - HTTP timeout in ms (default: 100000 / 100 seconds)
 - `llmbot_rate_limit` - Seconds between requests per user (default: 10)
 - `llmbot_max_response_size` - Max response size in bytes (default: 50000)

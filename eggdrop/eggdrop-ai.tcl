@@ -18,9 +18,15 @@ set llmbot_gateway "http://127.0.0.1:3042/chat"
 set llmbot_store_gateway "http://127.0.0.1:3042/store"
 set llmbot_summary_gateway "http://127.0.0.1:3042/summary"
 set llmbot_bash_gateway "http://127.0.0.1:3042/bash"
+set llmbot_haiku_gateway "http://127.0.0.1:3042/haiku"
 set llmbot_timeout 100000 ;# 100 seconds for slow free tier models
 set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
+
+# Daily haiku: posts a haiku distilled from the last 24h of the channel.
+# Time mask is "minute hour day month year" (eggdrop glob, 2-digit min/hour).
+set llmbot_haiku_channel "#robodisco.com"
+set llmbot_haiku_time "00 09 * * *" ;# daily at 09:00 server time
 
 # Rate limiting storage: array of user -> timestamp
 array set llmbot_last_request {}
@@ -30,7 +36,11 @@ bind pubm - * llmbot_pub_handler
 bind pub - "!deepthought" llmbot_deepthought
 bind pub - "!summary" llmbot_summary
 bind pub - "!bash" llmbot_bash
+bind pub - "!haiku" llmbot_haiku
 bind pub - "!help" llmbot_help
+
+# Daily haiku timer (mask defined above)
+bind time - $llmbot_haiku_time llmbot_daily_haiku
 
 proc llmbot_pub_handler {nick uhost hand chan text} {
     global llmbot_last_request llmbot_rate_limit botnick
@@ -226,6 +236,70 @@ proc llmbot_summary {nick uhost hand chan text} {
     return 0
 }
 
+# Fired daily by the time bind -- post a haiku from the last 24h to the configured channel
+proc llmbot_daily_haiku {min hour day month year} {
+    global llmbot_haiku_channel
+    llmbot_post_haiku $llmbot_haiku_channel 24 0
+    return 0
+}
+
+# Manual !haiku trigger
+proc llmbot_haiku {nick uhost hand chan text} {
+    global llmbot_last_request llmbot_rate_limit
+
+    set now [clock seconds]
+    set user_key "${nick}!${chan}"
+    if {[info exists llmbot_last_request($user_key)]} {
+        set elapsed [expr {$now - $llmbot_last_request($user_key)}]
+        if {$elapsed < $llmbot_rate_limit} {
+            putserv "PRIVMSG $chan :$nick: please wait [expr {$llmbot_rate_limit - $elapsed}]s"
+            return 0
+        }
+    }
+    set llmbot_last_request($user_key) $now
+
+    llmbot_post_haiku $chan 24 1
+    return 0
+}
+
+# Shared haiku poster. notify_empty=1 speaks up when the channel is too quiet;
+# the daily timer passes 0 so a silent day stays silent instead of nagging.
+proc llmbot_post_haiku {chan hours notify_empty} {
+    global llmbot_haiku_gateway llmbot_timeout
+
+    set payload [format {{"channel":"%s","hours":%d}} [llmbot_json_escape $chan] $hours]
+
+    if {[catch {
+        set token [::http::geturl $llmbot_haiku_gateway \
+            -query $payload \
+            -timeout $llmbot_timeout \
+            -type "application/json" \
+            -headers [list "Content-Type" "application/json"]]
+
+        set status [::http::status $token]
+        set ncode [::http::ncode $token]
+        set data [::http::data $token]
+        ::http::cleanup $token
+
+        if {$status eq "ok" && $ncode == 200} {
+            foreach line [split [llmbot_sanitize_irc $data] "\n"] {
+                set line [string trim $line]
+                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+            }
+        } elseif {$ncode == 204} {
+            if {$notify_empty} { putserv "PRIVMSG $chan :too quiet for poetry right now" }
+        } else {
+            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
+            if {$safe_data eq ""} { set safe_data "(no response)" }
+            if {$notify_empty} { putserv "PRIVMSG $chan :haiku error ($ncode): $safe_data" }
+            putlog "haiku error ($ncode): $safe_data"
+        }
+    } error]} {
+        if {$notify_empty} { putserv "PRIVMSG $chan :haiku failed: [string range [llmbot_sanitize_irc $error] 0 100]" }
+        putlog "haiku failed: $error"
+    }
+}
+
 proc llmbot_bash {nick uhost hand chan text} {
     global llmbot_bash_gateway llmbot_timeout llmbot_last_request llmbot_rate_limit
 
@@ -308,6 +382,7 @@ proc llmbot_help {nick uhost hand chan text} {
     putserv "PRIVMSG $chan :  !help - show this message"
     putserv "PRIVMSG $chan :  !summary \[hours\] - summarize recent channel activity (default: 24h, max: 96h)"
     putserv "PRIVMSG $chan :  !bash \[random|top|search <term>|#id\] - bash.org quote"
+    putserv "PRIVMSG $chan :  !haiku - a haiku from the last 24h (also posts daily at 09:00)"
     putserv "PRIVMSG $chan :  !deepthought - a random deep thought"
     putserv "PRIVMSG $chan :  $botnick <message> - ask the bot a question"
     return 0
