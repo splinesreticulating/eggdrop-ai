@@ -66,7 +66,7 @@ From Eggdrop DCC/partyline:
   - `GET /health` - Health check (returns "OK")
   - `POST /chat` - Main LLM endpoint (generates response, stores assistant reply in memory)
   - `POST /store` - Memory storage only (no LLM response, used by Eggdrop for all channel messages)
-  - `POST /summary` - Time-based channel summary via LLM (no semantic search, up to 96h, 1200 token limit)
+  - `POST /summary` - Time-based channel summary via LLM (no semantic search, up to 96h, 150 token limit, hard-clipped to 380 chars so it fits one IRC line)
   - `POST /haiku` - Time-based 5-7-5 haiku distilled from recent activity (default 24h, max 96h, 100 token limit); returns `204 No Content` when the channel had no messages in the window
 - Request format: `{message, user, channel}` for /chat and /store; `{channel, hours}` for /summary and /haiku (hours optional for /haiku, default 24)
 - Response: Plain text (not JSON) for easy Tcl parsing
@@ -122,7 +122,7 @@ Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 ### OpenRouter Integration
 Gateway forwards requests to `https://openrouter.ai/api/v1/chat/completions`:
 - Messages array: system prompt + vector memory context (chronological) + current message
-- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (`server.ts:45-48`); summary uses `SUMMARY_MAX_TOKENS: 1200` (`server.ts:46`)
+- Parameters: `max_tokens: 300`, `temperature: 0.8`, `top_p: 0.9` (`server.ts:45-48`); summary uses `SUMMARY_MAX_TOKENS: 150` plus a `SUMMARY_MAX_CHARS: 380` post-clip (`server.ts:47-48`)
 
 #### Checking Available Models
 To get a list of currently available models from OpenRouter:

@@ -44,7 +44,8 @@ const MAX_CHANNEL_LENGTH = 100;
 const TRIM_MESSAGE_TO = 500;
 const API_TIMEOUT_MS = 90000; // 90 seconds for slow free tier models
 const MAX_TOKENS = 300;
-const SUMMARY_MAX_TOKENS = 1200;
+const SUMMARY_MAX_TOKENS = 150;
+const SUMMARY_MAX_CHARS = 380; // one IRC line (512-byte limit incl. PRIVMSG overhead)
 const HAIKU_MAX_TOKENS = 100;
 const TEMPERATURE = 1.2;
 const TOP_P = 1.0;
@@ -167,6 +168,23 @@ app.post('/store', async (req: Request, res: Response) => {
   }
 });
 
+// Clip text to a hard character budget, preferring the last complete sentence.
+function truncateToSentence(text: string, maxChars: number): string {
+  const oneLine = text.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= maxChars) return oneLine;
+
+  const clipped = oneLine.slice(0, maxChars);
+  const lastSentence = Math.max(
+    clipped.lastIndexOf('. '),
+    clipped.lastIndexOf('! '),
+    clipped.lastIndexOf('? ')
+  );
+  if (lastSentence > maxChars / 2) return clipped.slice(0, lastSentence + 1);
+
+  const lastSpace = clipped.lastIndexOf(' ');
+  return (lastSpace > 0 ? clipped.slice(0, lastSpace) : clipped).trimEnd() + '...';
+}
+
 // Summary endpoint (time-based retrieval, no semantic search)
 app.post('/summary', async (req: Request, res: Response) => {
   try {
@@ -192,7 +210,7 @@ app.post('/summary', async (req: Request, res: Response) => {
     const summaryMessages = [
       {
         role: 'system',
-        content: 'Summarize the following IRC channel activity in exactly 3 sentences or fewer. You MUST complete your final sentence — never trail off mid-sentence. Be factual and concise. Focus on main topics and notable events. Use plain text only — no markdown, no bold, no asterisks, no emphasis.'
+        content: 'Summarize the following IRC channel activity in 2 sentences or fewer and under 350 characters total. This is a hard limit: anything longer gets cut off mid-word by IRC. You MUST complete your final sentence — never trail off mid-sentence. Be factual and concise. Focus on main topics and notable events. Use plain text only — no markdown, no bold, no asterisks, no emphasis.'
       },
       {
         role: 'user',
@@ -235,8 +253,10 @@ app.post('/summary', async (req: Request, res: Response) => {
 
       if (!reply) return res.status(502).send('Empty response from LLM');
 
-      console.log(`[${new Date().toISOString()}] /summary ${sanitizeForLog(channel)} (${messages.length} msgs, ${hours}h)`);
-      res.type('text/plain').send(reply);
+      const trimmed = truncateToSentence(reply, SUMMARY_MAX_CHARS);
+
+      console.log(`[${new Date().toISOString()}] /summary ${sanitizeForLog(channel)} (${messages.length} msgs, ${hours}h, ${trimmed.length} chars)`);
+      res.type('text/plain').send(trimmed);
 
     } catch (fetchError: unknown) {
       clearTimeout(timeoutId);
