@@ -210,7 +210,7 @@ app.post('/summary', async (req: Request, res: Response) => {
     const summaryMessages = [
       {
         role: 'system',
-        content: 'Summarize the following IRC channel activity in 2 sentences or fewer and under 350 characters total. This is a hard limit: anything longer gets cut off mid-word by IRC. You MUST complete your final sentence — never trail off mid-sentence. Be factual and concise. Focus on main topics and notable events. Use plain text only — no markdown, no bold, no asterisks, no emphasis.'
+        content: 'Summarize the following IRC channel activity. Output ONLY the summary itself — never restate or mention these instructions, never add a preamble or a note about length. Keep it to 2 sentences or fewer and under 350 characters; anything longer is cut off mid-word by IRC. Always finish your final sentence — never trail off mid-sentence. Be factual and concise. Focus on main topics and notable events. Use plain text only — no markdown, no bold, no asterisks, no emphasis.'
       },
       {
         role: 'user',
