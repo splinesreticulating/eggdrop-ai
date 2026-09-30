@@ -60,12 +60,7 @@ OPENROUTER_API_KEY=sk-or-v1-...
 Get your API key from: https://openrouter.ai/keys
 
 **Setup vector memory system:**
-```bash
-# Download and setup sqlite-vec extension (required for vector embeddings)
-npm run setup
-```
-
-This downloads the sqlite-vec extension needed for vector similarity search.
+Download the sqlite-vec loadable extension for your platform from https://github.com/asg017/sqlite-vec/releases (the `loadable` archive) and put `vec0.so` (Linux) or `vec0.dylib` (macOS) in `gateway/extensions/`. It's required for vector similarity search.
 
 ### 3. Run the Gateway
 
@@ -261,7 +256,7 @@ In IRC DCC chat or partyline:
 
 **Gateway won't start / exits immediately:**
 - Missing `OPENROUTER_API_KEY` in `.env`
-- Missing sqlite-vec extension - run `npm run setup`
+- Missing sqlite-vec extension - put `vec0.so`/`vec0.dylib` in `gateway/extensions/` (see setup above)
 - Gateway validates API key on startup and exits if not configured
 
 **"LLM service error":**

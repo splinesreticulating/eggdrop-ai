@@ -93,67 +93,86 @@ proc llmbot_store_message {nick chan message} {
         [llmbot_json_escape $nick] \
         [llmbot_json_escape $chan]]
 
-    # Fire and forget - store message without waiting for response
-    if {[catch {
-        set token [::http::geturl $llmbot_store_gateway \
-            -query $payload \
-            -timeout 5000 \
-            -type "application/json" \
-            -headers [list "Content-Type" "application/json"] \
-            -command llmbot_store_callback]
-    } error]} {
-        # Silently fail - don't interrupt channel flow
-    }
+    # Fire and forget - failures are silent so channel flow isn't interrupted
+    llmbot_request $llmbot_store_gateway $payload 5000 llmbot_ignore
 }
 
-proc llmbot_store_callback {token} {
-    # Cleanup after async store request
-    catch {::http::cleanup $token}
-}
+proc llmbot_ignore {args} {}
 
 proc llmbot_query {nick chan message} {
-    global llmbot_gateway llmbot_timeout llmbot_max_response_size
+    global llmbot_gateway llmbot_timeout
 
     set payload [format {{"message":"%s","user":"%s","channel":"%s"}} \
         [llmbot_json_escape $message] \
         [llmbot_json_escape $nick] \
         [llmbot_json_escape $chan]]
 
-    if {[catch {
-        set token [::http::geturl $llmbot_gateway \
-            -query $payload \
-            -timeout $llmbot_timeout \
-            -type "application/json" \
-            -headers [list "Content-Type" "application/json"]]
+    llmbot_request $llmbot_gateway $payload $llmbot_timeout \
+        [list llmbot_query_done $nick $chan]
+}
 
-        set status [::http::status $token]
-        set ncode [::http::ncode $token]
-        set data [::http::data $token]
-        ::http::cleanup $token
+proc llmbot_query_done {nick chan status ncode data} {
+    global llmbot_max_response_size
 
-        if {$status eq "ok" && $ncode == 200} {
-            # Limit response size to prevent DoS
-            if {[string length $data] > $llmbot_max_response_size} {
-                putserv "PRIVMSG $chan :$nick: response too large, truncated"
-                set data [string range $data 0 $llmbot_max_response_size]
-            }
-
-            # Sanitize and send each line
-            foreach line [split [llmbot_sanitize_irc $data] "\n"] {
-                set line [string trim $line]
-                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
-            }
-        } else {
-            # Show actual error details for debugging
-            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
-            if {$safe_data eq ""} { set safe_data "(no response)" }
-            putserv "PRIVMSG $chan :$nick: gateway error ($ncode): $safe_data"
+    if {$status ne "ok"} {
+        putserv "PRIVMSG $chan :$nick: gateway failed: [string range [llmbot_sanitize_irc $data] 0 100]"
+    } elseif {$ncode == 200} {
+        # Limit response size to prevent DoS
+        if {[string length $data] > $llmbot_max_response_size} {
+            putserv "PRIVMSG $chan :$nick: response too large, truncated"
+            set data [string range $data 0 $llmbot_max_response_size]
         }
-    } error]} {
-        # Show actual error for debugging
-        set safe_error [string range [llmbot_sanitize_irc $error] 0 100]
-        putserv "PRIVMSG $chan :$nick: gateway failed: $safe_error"
+
+        # Sanitize and send each line
+        foreach line [split [llmbot_sanitize_irc $data] "\n"] {
+            set line [string trim $line]
+            if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+        }
+    } else {
+        # Show actual error details for debugging
+        putserv "PRIVMSG $chan :$nick: gateway error ($ncode): [llmbot_error_snippet $data]"
     }
+}
+
+# Async POST to the gateway. Never blocks the event loop: blocking geturl
+# freezes the whole bot (every channel) until the LLM answers. On completion
+# calls {*}$done status ncode data, where status is "ok", or "error"/"timeout"
+# with the reason in data.
+proc llmbot_request {url payload timeout done} {
+    if {[catch {
+        ::http::geturl $url \
+            -query $payload \
+            -timeout $timeout \
+            -type "application/json" \
+            -headers [list "Content-Type" "application/json"] \
+            -command [list llmbot_request_done $done]
+    } error]} {
+        llmbot_request_finish $done error 0 $error
+    }
+}
+
+proc llmbot_request_done {done token} {
+    set status [::http::status $token]
+    set ncode [::http::ncode $token]
+    switch -- $status {
+        ok      { set data [::http::data $token] }
+        timeout { set data "timed out" }
+        default { set status error; set data [lindex [::http::error $token] 0] }
+    }
+    ::http::cleanup $token
+    llmbot_request_finish $done $status $ncode $data
+}
+
+proc llmbot_request_finish {done status ncode data} {
+    if {[catch {{*}$done $status $ncode $data} error]} {
+        putlog "eggdrop-ai: callback [lindex $done 0] failed: $error"
+    }
+}
+
+proc llmbot_error_snippet {data} {
+    set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
+    if {$safe_data eq ""} { set safe_data "(no response)" }
+    return $safe_data
 }
 
 proc llmbot_json_escape {text} {
@@ -169,7 +188,8 @@ proc llmbot_sanitize_irc {text} {
     return $text
 }
 
-bind time - "*/5 * * * *" llmbot_cleanup
+# Time masks are glob, not cron ("*/5" would never match), so run every minute
+bind time - "* * * * *" llmbot_cleanup
 
 proc llmbot_cleanup {min hour day month year} {
     global llmbot_last_request llmbot_rate_limit
@@ -208,32 +228,22 @@ proc llmbot_summary {nick uhost hand chan text} {
 
     set payload [format {{"channel":"%s","hours":%d}} [llmbot_json_escape $chan] $hours]
 
-    if {[catch {
-        set token [::http::geturl $llmbot_summary_gateway \
-            -query $payload \
-            -timeout $llmbot_timeout \
-            -type "application/json" \
-            -headers [list "Content-Type" "application/json"]]
-
-        set status [::http::status $token]
-        set ncode [::http::ncode $token]
-        set data [::http::data $token]
-        ::http::cleanup $token
-
-        if {$status eq "ok" && $ncode == 200} {
-            foreach line [split [llmbot_sanitize_irc $data] "\n"] {
-                set line [string trim $line]
-                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
-            }
-        } else {
-            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
-            if {$safe_data eq ""} { set safe_data "(no response)" }
-            putserv "PRIVMSG $chan :$nick: summary error ($ncode): $safe_data"
-        }
-    } error]} {
-        putserv "PRIVMSG $chan :$nick: summary failed: [string range [llmbot_sanitize_irc $error] 0 100]"
-    }
+    llmbot_request $llmbot_summary_gateway $payload $llmbot_timeout \
+        [list llmbot_summary_done $nick $chan]
     return 0
+}
+
+proc llmbot_summary_done {nick chan status ncode data} {
+    if {$status ne "ok"} {
+        putserv "PRIVMSG $chan :$nick: summary failed: [string range [llmbot_sanitize_irc $data] 0 100]"
+    } elseif {$ncode == 200} {
+        foreach line [split [llmbot_sanitize_irc $data] "\n"] {
+            set line [string trim $line]
+            if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+        }
+    } else {
+        putserv "PRIVMSG $chan :$nick: summary error ($ncode): [llmbot_error_snippet $data]"
+    }
 }
 
 # Fired daily by the time bind -- post a haiku from the last 24h to the configured channel
@@ -269,34 +279,25 @@ proc llmbot_post_haiku {chan hours notify_empty} {
 
     set payload [format {{"channel":"%s","hours":%d}} [llmbot_json_escape $chan] $hours]
 
-    if {[catch {
-        set token [::http::geturl $llmbot_haiku_gateway \
-            -query $payload \
-            -timeout $llmbot_timeout \
-            -type "application/json" \
-            -headers [list "Content-Type" "application/json"]]
+    llmbot_request $llmbot_haiku_gateway $payload $llmbot_timeout \
+        [list llmbot_haiku_done $chan $notify_empty]
+}
 
-        set status [::http::status $token]
-        set ncode [::http::ncode $token]
-        set data [::http::data $token]
-        ::http::cleanup $token
-
-        if {$status eq "ok" && $ncode == 200} {
-            foreach line [split [llmbot_sanitize_irc $data] "\n"] {
-                set line [string trim $line]
-                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
-            }
-        } elseif {$ncode == 204} {
-            if {$notify_empty} { putserv "PRIVMSG $chan :too quiet for poetry right now" }
-        } else {
-            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
-            if {$safe_data eq ""} { set safe_data "(no response)" }
-            if {$notify_empty} { putserv "PRIVMSG $chan :haiku error ($ncode): $safe_data" }
-            putlog "haiku error ($ncode): $safe_data"
+proc llmbot_haiku_done {chan notify_empty status ncode data} {
+    if {$status ne "ok"} {
+        if {$notify_empty} { putserv "PRIVMSG $chan :haiku failed: [string range [llmbot_sanitize_irc $data] 0 100]" }
+        putlog "haiku failed: $data"
+    } elseif {$ncode == 200} {
+        foreach line [split [llmbot_sanitize_irc $data] "\n"] {
+            set line [string trim $line]
+            if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
         }
-    } error]} {
-        if {$notify_empty} { putserv "PRIVMSG $chan :haiku failed: [string range [llmbot_sanitize_irc $error] 0 100]" }
-        putlog "haiku failed: $error"
+    } elseif {$ncode == 204} {
+        if {$notify_empty} { putserv "PRIVMSG $chan :too quiet for poetry right now" }
+    } else {
+        set safe_data [llmbot_error_snippet $data]
+        if {$notify_empty} { putserv "PRIVMSG $chan :haiku error ($ncode): $safe_data" }
+        putlog "haiku error ($ncode): $safe_data"
     }
 }
 
@@ -348,32 +349,22 @@ proc llmbot_bash {nick uhost hand chan text} {
         [llmbot_json_escape $subcommand] \
         [llmbot_json_escape $subcmd_arg]]
 
-    if {[catch {
-        set token [::http::geturl $llmbot_bash_gateway \
-            -query $payload \
-            -timeout $llmbot_timeout \
-            -type "application/json" \
-            -headers [list "Content-Type" "application/json"]]
-
-        set status [::http::status $token]
-        set ncode [::http::ncode $token]
-        set data [::http::data $token]
-        ::http::cleanup $token
-
-        if {$status eq "ok" && $ncode == 200} {
-            foreach line [split $data "\n"] {
-                set line [string trim [llmbot_sanitize_irc $line]]
-                if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
-            }
-        } else {
-            set safe_data [string range [llmbot_sanitize_irc $data] 0 200]
-            if {$safe_data eq ""} { set safe_data "(no response)" }
-            putserv "PRIVMSG $chan :$nick: bash error ($ncode): $safe_data"
-        }
-    } error]} {
-        putserv "PRIVMSG $chan :$nick: bash failed: [string range [llmbot_sanitize_irc $error] 0 100]"
-    }
+    llmbot_request $llmbot_bash_gateway $payload $llmbot_timeout \
+        [list llmbot_bash_done $nick $chan]
     return 0
+}
+
+proc llmbot_bash_done {nick chan status ncode data} {
+    if {$status ne "ok"} {
+        putserv "PRIVMSG $chan :$nick: bash failed: [string range [llmbot_sanitize_irc $data] 0 100]"
+    } elseif {$ncode == 200} {
+        foreach line [split $data "\n"] {
+            set line [string trim [llmbot_sanitize_irc $line]]
+            if {$line ne ""} { putserv "PRIVMSG $chan :$line" }
+        }
+    } else {
+        putserv "PRIVMSG $chan :$nick: bash error ($ncode): [llmbot_error_snippet $data]"
+    }
 }
 
 proc llmbot_help {nick uhost hand chan text} {
