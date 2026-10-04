@@ -209,6 +209,15 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eg
 - Service type: `forking` (backgrounds automatically)
 - Eggdrop's working dir `/home/eggdrop/eggdrop` isn't traversable by `ubuntu`: run `cd`/globs inside `sudo -u eggdrop bash -c '...'`
 - Not in this repo: `/home/eggdrop/eggdrop/scripts/suck.tcl` (`!suck <url>`, runs `/srv/robodisco/scripts/suck` via non-blocking pipe, full output to `logs/suck.log`). Edit it on the server; back it up first
+- Also not in this repo: `scripts/autovoice-bashlee.tcl` - a table of users (Bashlee, mute) given auto-op (`|+oa`) / autovoice (`|+g`), re-applied on every start
+- Bot's IRC nick is `soonyo`. Its userfile is `all.user`, and `set owner "mute"` makes `mute` a global owner (`+n`)
+
+**Userfile safety (users were wiped once - don't repeat it):**
+- Never call `adduser`/`chattr`/`save` from `bind evnt - rehash` (or `prerehash`): on rehash, that event fires BEFORE eggdrop re-reads `all.user`, so `save` overwrites the userfile with only what's in memory. This silently deleted every other user (epi, godless, mute's password/hosts) from Sep 29 to Oct 4 2026
+- Run user setup from `bind evnt - userfile-loaded` (plus `init-server`) instead, and keep it idempotent (`validuser` / `matchattr` checks first)
+- A rehash (`kill -HUP`) keeps the Tcl interpreter, so binds from an old version of a script stay active. When changing or removing a bind, `unbind` the old one in the script, or do a full `systemctl restart`
+- Back up `all.user` before any user change: `sudo -u eggdrop cp -p all.user all.user.bak-$(date +%Y%m%d)`. After a rehash, check that `created` timestamps in `all.user` didn't change - a new timestamp means the user was recreated
+- `all.user.backup` (root-owned, Jan 2026) is the last known-good userfile; read it with `sudo`, not `sudo -u eggdrop`
 
 ## Common Modifications
 
