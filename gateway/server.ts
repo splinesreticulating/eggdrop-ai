@@ -52,11 +52,12 @@ const TOP_P = 1.0;
 const FREQUENCY_PENALTY = 0.8;
 const BASH_DB_PATH = process.env.BASH_DB_PATH || path.join(__dirname, 'data', 'bash-quotes.db');
 
-// Load system prompt from file and substitute bot name
-const SYSTEM_PROMPT = fs.readFileSync(
-  path.join(__dirname, 'system-prompt.txt'),
-  'utf-8'
-).trim().replace(/\{\{BOT_NAME\}\}/g, BOT_NAME);
+// Load system prompt from file (plus optional gitignored local additions) and substitute bot name
+const LOCAL_PROMPT_PATH = path.join(__dirname, 'system-prompt.local.txt');
+const SYSTEM_PROMPT = [
+  fs.readFileSync(path.join(__dirname, 'system-prompt.txt'), 'utf-8').trim(),
+  fs.existsSync(LOCAL_PROMPT_PATH) ? fs.readFileSync(LOCAL_PROMPT_PATH, 'utf-8').trim() : ''
+].filter(Boolean).join('\n').replace(/\{\{BOT_NAME\}\}/g, BOT_NAME);
 
 interface ChatRequest {
   message: string;

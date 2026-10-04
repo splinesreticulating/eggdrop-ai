@@ -83,7 +83,7 @@ From Eggdrop DCC/partyline:
 - Note: /chat does NOT store user message (already stored by Eggdrop via /store) to avoid duplication
 
 ### System Prompt Philosophy
-Bot personality is defined in `gateway/system-prompt.txt`. Edit that file to change behavior — don't add code logic. Response rules (length, format) and personality traits are both in there. `{{BOT_NAME}}` is substituted at startup from the `BOT_NAME` env var.
+Bot personality is defined in `gateway/system-prompt.txt`. Edit that file to change behavior — don't add code logic. Optional `gateway/system-prompt.local.txt` (gitignored) is appended — use it for anything naming real channel people, since this repo is public. Response rules (length, format) and personality traits are both in there. `{{BOT_NAME}}` is substituted at startup from the `BOT_NAME` env var.
 
 ### Eggdrop Script (eggdrop/eggdrop-ai.tcl)
 - **Full channel memory**: Stores ALL channel messages in vector memory (not just messages addressed to bot)
@@ -121,7 +121,7 @@ Tcl script variables (top of `eggdrop/eggdrop-ai.tcl`):
 - `llmbot_summary_gateway` - Summary URL (default: http://127.0.0.1:3042/summary)
 - `llmbot_haiku_gateway` - Haiku URL (default: http://127.0.0.1:3042/haiku)
 - `llmbot_bash_gateway` - bash.org quote URL (default: http://127.0.0.1:3042/bash)
-- `llmbot_haiku_channel` - Channel the daily haiku posts to (default: #robodisco.com)
+- `llmbot_haiku_channel` - Channel the daily haiku posts to. Set it in `eggdrop.conf` *before* the `source` line (the script only defaults it if unset); empty (default) disables the daily post
 - `llmbot_haiku_time` - Daily haiku time mask, `"minute hour day month year"` (default: `"00 09 * * *"` = 09:00 server time)
 - `llmbot_timeout` - HTTP timeout in ms (default: 100000 / 100 seconds)
 - `llmbot_rate_limit` - Seconds between requests per user (default: 10)
@@ -208,12 +208,12 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eg
 - Bot runs under: `eggdrop` user account
 - Service type: `forking` (backgrounds automatically)
 - Eggdrop's working dir `/home/eggdrop/eggdrop` isn't traversable by `ubuntu`: run `cd`/globs inside `sudo -u eggdrop bash -c '...'`
-- Not in this repo: `/home/eggdrop/eggdrop/scripts/suck.tcl` (`!suck <url>`, runs `/srv/robodisco/scripts/suck` via non-blocking pipe, full output to `logs/suck.log`). Edit it on the server; back it up first
-- Also not in this repo: `scripts/autovoice-bashlee.tcl` - a table of users (Bashlee, mute) given auto-op (`|+oa`) / autovoice (`|+g`), re-applied on every start
-- Bot's IRC nick is `soonyo`. Its userfile is `all.user`, and `set owner "mute"` makes `mute` a global owner (`+n`)
+- Not in this repo: `/home/eggdrop/eggdrop/scripts/suck.tcl` (`!suck <url>`, runs an import script under `/srv` via non-blocking pipe, full output to `logs/suck.log`). Edit it on the server; back it up first
+- Also not in this repo: a server-side auto-op/autovoice script (a table of users given `|+oa` / `|+g`, re-applied on every start). Bot nick, user handles and script name are in Claude's memory, not here (this repo is public)
+- The userfile is `all.user`; the handle in `set owner` gets global owner (`+n`)
 
 **Userfile safety (users were wiped once - don't repeat it):**
-- Never call `adduser`/`chattr`/`save` from `bind evnt - rehash` (or `prerehash`): on rehash, that event fires BEFORE eggdrop re-reads `all.user`, so `save` overwrites the userfile with only what's in memory. This silently deleted every other user (epi, godless, mute's password/hosts) from Sep 29 to Oct 4 2026
+- Never call `adduser`/`chattr`/`save` from `bind evnt - rehash` (or `prerehash`): on rehash, that event fires BEFORE eggdrop re-reads `all.user`, so `save` overwrites the userfile with only what's in memory. This once silently deleted every other user, including the owner's password and hosts
 - Run user setup from `bind evnt - userfile-loaded` (plus `init-server`) instead, and keep it idempotent (`validuser` / `matchattr` checks first)
 - A rehash (`kill -HUP`) keeps the Tcl interpreter, so binds from an old version of a script stay active. When changing or removing a bind, `unbind` the old one in the script, or do a full `systemctl restart`
 - Back up `all.user` before any user change: `sudo -u eggdrop cp -p all.user all.user.bak-$(date +%Y%m%d)`. After a rehash, check that `created` timestamps in `all.user` didn't change - a new timestamp means the user was recreated

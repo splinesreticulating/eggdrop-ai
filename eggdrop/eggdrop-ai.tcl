@@ -24,8 +24,10 @@ set llmbot_rate_limit 10 ;# seconds between requests per user
 set llmbot_max_response_size 50000 ;# max bytes in LLM response (50KB)
 
 # Daily haiku: posts a haiku distilled from the last 24h of the channel.
+# Set llmbot_haiku_channel in eggdrop.conf before sourcing this script;
+# empty disables the daily post (!haiku still works).
 # Time mask is "minute hour day month year" (eggdrop glob, 2-digit min/hour).
-set llmbot_haiku_channel "#robodisco.com"
+if {![info exists llmbot_haiku_channel]} { set llmbot_haiku_channel "" }
 set llmbot_haiku_time "00 09 * * *" ;# daily at 09:00 server time
 
 # Rate limiting storage: array of user -> timestamp
@@ -249,6 +251,7 @@ proc llmbot_summary_done {nick chan status ncode data} {
 # Fired daily by the time bind -- post a haiku from the last 24h to the configured channel
 proc llmbot_daily_haiku {min hour day month year} {
     global llmbot_haiku_channel
+    if {$llmbot_haiku_channel eq ""} { return 0 }
     llmbot_post_haiku $llmbot_haiku_channel 24 0
     return 0
 }
