@@ -214,7 +214,8 @@ ssh -i ~/.ssh/your-server.key -p 2222 ubuntu@your-server "sudo tail -50 /home/eg
 
 **Userfile safety (users were wiped once - don't repeat it):**
 - Never call `adduser`/`chattr`/`save` from `bind evnt - rehash` (or `prerehash`): on rehash, that event fires BEFORE eggdrop re-reads `all.user`, so `save` overwrites the userfile with only what's in memory. This once silently deleted every other user, including the owner's password and hosts
-- Run user setup from `bind evnt - userfile-loaded` (plus `init-server`) instead, and keep it idempotent (`validuser` / `matchattr` checks first)
+- Run user setup from `bind evnt - userfile-loaded` (plus `init-server`) instead, and keep it idempotent (`validuser` / `matchattr` checks first). Neither event fires on a rehash; a `utimer` set while the script is sourced does (the userfile reload finishes first). Bail out if `[countusers] == 0` as a guard
+- `matchattr $hand oa` means o OR a, not both - check each flag separately when testing whether flags still need adding
 - A rehash (`kill -HUP`) keeps the Tcl interpreter, so binds from an old version of a script stay active. When changing or removing a bind, `unbind` the old one in the script, or do a full `systemctl restart`
 - Back up `all.user` before any user change: `sudo -u eggdrop cp -p all.user all.user.bak-$(date +%Y%m%d)`. After a rehash, check that `created` timestamps in `all.user` didn't change - a new timestamp means the user was recreated
 - `all.user.backup` (root-owned, Jan 2026) is the last known-good userfile; read it with `sudo`, not `sudo -u eggdrop`
